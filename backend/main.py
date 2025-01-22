@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from core.security import get_current_user
 from models import User
-from api.routes import users, groups, memberships  # Import your routers
+from api.routes import users, groups, memberships, elections  # Import your routers
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -20,6 +20,7 @@ app.add_middleware(
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(groups.router, prefix="/groups", tags=["groups"])  
 app.include_router(memberships.router, prefix="/memberships", tags=["memberships"])
+app.include_router(elections.router, prefix="/groups/{group_id}/elections", tags=["elections"])
 # ... other protected routes
 
 # --- Placeholder Endpoint (Not Protected) ---

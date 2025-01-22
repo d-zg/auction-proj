@@ -118,6 +118,7 @@ async def remove_member_from_group(
             detail=f"User with email {email_to_remove} not found",
         )
 
+
     # Check if the current user is an admin or the user to be removed
     if current_user.uid != user_to_remove.uid:
         # If not the same user, check if the current user is an admin

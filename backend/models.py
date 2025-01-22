@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime
+from enum import Enum
 
 class User(BaseModel):
     uid: str
@@ -32,17 +33,24 @@ class Membership(BaseModel):
     votes: List["Vote"] = []  # Relationship: Membership has many Votes
 
 # --- Election Model ---
+class ElectionStatus(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    UPCOMING = "upcoming"
+
+
+# --- Election Model ---
 class Election(BaseModel):
     election_id: str
     group_id: str  # Relationship: Election belongs to Group (replace with reference if needed)
     start_date: datetime
     end_date: datetime
-    status: str  # Consider using an Enum: "open" | "closed" | "upcoming"
-    payment_options: List[str] = []  # Example: ["fiat", "crypto"]
-    price_options: List[float] = []  # Example: [1.0, 2.5, 5.0]
+    status: ElectionStatus = Field(default=ElectionStatus.UPCOMING) # default to upcoming
+    payment_options: str  # Example: ["fiat", "crypto"]
+    price_options: str  # Example: [1.0, 2.5, 5.0]
     winning_proposal_id: Optional[str] = None # Relationship: Election has one winning Proposal (replace with reference if needed)
     group: Optional[Group] = None  # Relationship: Election belongs to Group
-    proposals: List["Proposal"] = []  # Relationship: Election has many Proposals
+    proposals: List[str] = []  # Relationship: Election has many Proposals
 
 # --- Proposal Model ---
 class Proposal(BaseModel):

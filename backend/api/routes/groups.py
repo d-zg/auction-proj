@@ -4,8 +4,21 @@ from db import db
 from core.security import get_current_user
 from typing import List
 from datetime import datetime
+from pydantic import BaseModel
 
 router = APIRouter()
+
+class GroupUpdate(BaseModel):
+    name: str
+    description: str
+
+class MemberWithDetails(BaseModel):
+    user: User
+    membership: Membership
+
+class UpdateTokenBalanceRequest(BaseModel):
+    token_balance: int
+
 
 
 @router.get("/my-groups", response_model=List[Group])
@@ -78,16 +91,85 @@ async def create_group(current_user: User = Depends(get_current_user)):
     return group
 
     
-@router.get("/{group_id}/members", response_model=List[User])
-async def get_group_members(
+@router.get("/{group_id}/members", response_model=List[MemberWithDetails])
+async def get_group_members_with_details(
     group_id: str,
     current_user: User = Depends(get_current_user)
 ):
     """
-    Retrieves a list of all members of a specific group.
+    Retrieves a list of all members of a specific group with their membership details.
+    """
+    # Ensure that the user is a member of the group before fetching members
+    membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
+    membership_doc = membership_ref.get()
+
+    if not membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group"
+        )
+
+    # Get all memberships for the group
+    membership_docs = (
+        db.collection("memberships")
+        .where("group_id", "==", group_id)
+        .stream()
+    )
+
+    members_with_details = []
+    for membership_doc in membership_docs:
+      membership = Membership.model_validate(membership_doc.to_dict())
+
+        #Fetch the user for the membership
+      user_ref = db.collection("users").document(membership.user_id)
+      user_doc = user_ref.get()
+
+      if user_doc.exists:
+        user = User.model_validate(user_doc.to_dict())
+        members_with_details.append(MemberWithDetails(user=user, membership=membership))
+
+    return members_with_details
+
+@router.get("/{group_id}", response_model=Group)
+async def get_group_details(group_id: str, current_user: User = Depends(get_current_user)):
+    """
+    Retrieves the details of a specific group, given the group's ID.
     """
 
-    # Check if the current user is a member of the group (or adjust authorization as needed)
+    # Ensure that the user is a member of the group before fetching details
+    membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
+    membership_doc = membership_ref.get()
+
+    if not membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group"
+        )
+    
+    group_ref = db.collection("groups").document(group_id)
+    group_doc = group_ref.get()
+
+    if not group_doc.exists:
+         raise HTTPException(
+             status_code=status.HTTP_404_NOT_FOUND,
+             detail="Group not found"
+         )
+    
+    group = Group.model_validate(group_doc.to_dict())
+    return group
+
+@router.put("/{group_id}", response_model=Group)
+async def update_group(
+    group_id: str,
+    group_update: GroupUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Updates the name and description of a specific group.
+
+    Only admins of the group can update the group details.
+    """
+    # Check if the current user is an admin of the group
     current_user_membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
     current_user_membership_doc = current_user_membership_ref.get()
 
@@ -97,27 +179,91 @@ async def get_group_members(
             detail="Current user is not a member of this group",
         )
 
-    # Get the memberships for the group
-    membership_docs = (
-        db.collection("memberships")
-        .where("group_id", "==", group_id)
-        .stream()
-    )
+    current_user_membership = Membership.model_validate(current_user_membership_doc.to_dict())
 
-    # Extract the user IDs from the memberships
-    user_ids = [doc.to_dict().get("user_id") for doc in membership_docs]
+    if current_user_membership.role != "admin":
+         raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can update group details",
+        )
 
-    # Fetch the users based on the user IDs
-    users = []
-    if user_ids:
-        # Use the 'in' operator to fetch users in batches (Firestore 'in' operator has a limit of 30)
-        for i in range(0, len(user_ids), 30):
-            user_ids_chunk = user_ids[i:i + 30]
-            user_docs_chunk = (
-                db.collection("users")
-                .where("uid", "in", user_ids_chunk)
-                .stream()
-            )
-            users.extend([User.model_validate(doc.to_dict()) for doc in user_docs_chunk])
+    # Retrieve the existing group document
+    group_ref = db.collection("groups").document(group_id)
+    group_doc = group_ref.get()
 
-    return users
+    if not group_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found",
+        )
+    
+    existing_group = group_doc.to_dict()
+
+    # Update the group with new name and description and updated_at
+    updated_group_data = {
+        **existing_group,
+         "name": group_update.name,
+        "description": group_update.description,
+        "updated_at": datetime.now()
+        }
+
+    group_ref.set(updated_group_data)
+
+    # Return the updated group
+    return Group.model_validate(updated_group_data)
+
+@router.patch("/{group_id}/members/{user_id}/token-balance", response_model=Membership)
+async def update_member_token_balance(
+    group_id: str,
+    user_id: str,
+    request: UpdateTokenBalanceRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Updates the token balance of a specific member within a group.
+
+    Only admins of a group can update member's token balances.
+    """
+
+    # Check if the current user is an admin of the group
+    current_user_membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
+    current_user_membership_doc = current_user_membership_ref.get()
+
+    if not current_user_membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group",
+        )
+
+    current_user_membership = Membership.model_validate(current_user_membership_doc.to_dict())
+
+    if current_user_membership.role != "admin":
+         raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can update member's token balances",
+        )
+    
+    # Retrieve the membership document
+    membership_id = f"{user_id}_{group_id}"
+    membership_ref = db.collection("memberships").document(membership_id)
+    membership_doc = membership_ref.get()
+
+    if not membership_doc.exists:
+         raise HTTPException(
+             status_code=status.HTTP_404_NOT_FOUND,
+             detail="Membership not found",
+         )
+    
+    existing_membership = membership_doc.to_dict()
+
+    # Update the token balance
+    updated_membership_data = {
+         **existing_membership,
+        "token_balance": request.token_balance,
+        "updated_at": datetime.now()
+    }
+
+    membership_ref.set(updated_membership_data)
+
+    # Return the updated membership
+    return Membership.model_validate(updated_membership_data)
