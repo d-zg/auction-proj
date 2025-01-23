@@ -66,6 +66,7 @@ class Proposal(BaseModel):
 # --- Vote Model ---
 class Vote(BaseModel):
     vote_id: str
+    election_id: str
     membership_id: str  # Relationship: Vote belongs to Membership (replace with reference if needed)
     proposal_id: str  # Relationship: Vote belongs to Proposal (replace with reference if needed)
     tokens_used: int

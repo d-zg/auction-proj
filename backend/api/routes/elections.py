@@ -6,6 +6,14 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pydantic import BaseModel, ValidationError
 from google.cloud import firestore
+from strategies.auction_resolution import (
+    AuctionResolutionStrategy,
+    MostVotesWinsStrategy,
+    FirstPriceCalculationStrategy,
+    SecondPriceCalculationStrategy,
+    AllPayPaymentStrategy,
+    WinnersPayPaymentStrategy
+)
 import logging
 import pdb
 
@@ -37,6 +45,17 @@ class ElectionCreate(BaseModel):
 class VoteCreate(BaseModel):
     proposal_id: str
     tokens_used: int
+
+class ElectionDetailsResponse(BaseModel):
+    election_id: str
+    group_id: str
+    start_date: datetime
+    end_date: datetime
+    status: ElectionStatus
+    payment_options: str
+    price_options: str
+    winning_proposal_id: Optional[str] = None
+    proposals: List[dict]
 
 
 @router.post("/", response_model=Election, status_code=status.HTTP_201_CREATED)
@@ -245,7 +264,6 @@ async def cast_vote(
     Allows a member to cast or change their vote during the open phase of an election.
     A user can only vote once for a single proposal in a single request.
     """
-    logger.info("What the fuck?")
     try:
          # Check if the current user is a member of the group
         current_user_membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
@@ -293,18 +311,21 @@ async def cast_vote(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Proposal {vote_data.proposal_id} not found",
             )
-            # Check if the user has already voted for this proposal
+            # Check if the user has already voted in this election
+            # Almost definitely a better way to do this query 
         existing_vote_docs = (
             db.collection("votes")
             .where("membership_id", "==", membership.membership_id)
-            .where("proposal_id", "==", vote_data.proposal_id)
+            .where("election_id", "==", election_id)
             .stream()
         )
+        existing_votes = list(existing_vote_docs)
 
         updated_vote = None
-        if any(existing_vote_docs):
+        # pdb.set_trace()
+        if existing_votes:
             # User has voted, update their vote
-            for existing_vote_doc in existing_vote_docs:
+            for existing_vote_doc in existing_votes:
                 existing_vote = Vote.model_validate(existing_vote_doc.to_dict())
                 vote_ref = db.collection("votes").document(existing_vote.vote_id)
                 updated_vote_data = {
@@ -321,6 +342,7 @@ async def cast_vote(
 
             vote = Vote(
                 vote_id = vote_id,
+                election_id = election_id, 
                 membership_id = membership.membership_id,
                 proposal_id = vote_data.proposal_id,
                 tokens_used = vote_data.tokens_used,
@@ -332,19 +354,8 @@ async def cast_vote(
             new_vote_ref.set(vote.model_dump())
             updated_vote = vote
 
-        pdb.set_trace()
         logger.info(f"Updated vote: {updated_vote}") 
 
-        return Vote(
-            vote_id = "dummy_vote_id",
-             membership_id = "dummy_memership_id",
-             proposal_id = vote_data.proposal_id,
-             tokens_used = vote_data.tokens_used,
-             created_at = datetime.now(),
-              updated_at = datetime.now()
-        )
-        if True:
-            print('hey')
         return updated_vote
     except HTTPException as e:
         raise e
@@ -354,3 +365,186 @@ async def cast_vote(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your vote."
         )
+
+@router.get("/{election_id}", response_model=ElectionDetailsResponse)
+async def get_election_details(
+    group_id: str,
+    election_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieves election details including all proposals, with their votes (if the election is closed)
+    """
+
+    # Check if the current user is a member of the group
+    current_user_membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
+    current_user_membership_doc = current_user_membership_ref.get()
+
+    if not current_user_membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group",
+        )
+
+    # Get the election
+    election_ref = db.collection("elections").document(election_id)
+    election_doc = election_ref.get()
+
+    if not election_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Election not found"
+        )
+
+    election = Election.model_validate(election_doc.to_dict())
+
+    # Get all proposals associated with the election
+    proposal_docs = (
+      db.collection("proposals")
+      .where("election_id", "==", election_id)
+      .stream()
+    )
+    proposals = []
+    for proposal_doc in proposal_docs:
+      proposal = Proposal.model_validate(proposal_doc.to_dict())
+        # if the election is closed, get all of the votes for that proposal
+      if election.status == ElectionStatus.CLOSED:
+           vote_docs = (
+                db.collection("votes")
+                .where("proposal_id", "==", proposal.proposal_id)
+                .stream()
+           )
+           votes = [Vote.model_validate(vote_doc.to_dict()).model_dump() for vote_doc in vote_docs]
+           proposals.append({**proposal.model_dump(), "votes": votes})
+      else:
+          proposals.append({**proposal.model_dump(), "votes": []})
+    # pdb.set_trace()
+    election_data = election.model_dump()
+    election_data.pop("proposals", None)
+    # Construct a response with all proposals (and vote information if election is closed)
+    return ElectionDetailsResponse(**election_data, proposals=proposals)
+
+
+@router.put("/{election_id}/close", response_model=Election)
+async def close_election(
+    group_id: str,
+    election_id: str,
+    current_user: User = Depends(get_current_user),
+    winning_proposal_id: Optional[str] = None
+):
+     """
+     Allows an admin to close an election and select the winning proposal
+     """
+     # Check if the current user is an admin of the group
+     current_user_membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
+     current_user_membership_doc = current_user_membership_ref.get()
+
+     if not current_user_membership_doc.exists:
+         raise HTTPException(
+             status_code=status.HTTP_404_NOT_FOUND,
+             detail="Current user is not a member of this group",
+         )
+
+     current_user_membership = Membership.model_validate(current_user_membership_doc.to_dict())
+
+     if current_user_membership.role != "admin":
+         raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN,
+             detail="Only admins can close elections",
+         )
+
+     # Retrieve the existing election document
+     election_ref = db.collection("elections").document(election_id)
+     election_doc = election_ref.get()
+
+     if not election_doc.exists:
+         raise HTTPException(
+             status_code=status.HTTP_404_NOT_FOUND,
+             detail="Election not found",
+         )
+     election = Election.model_validate(election_doc.to_dict())
+
+     # Ensure that the election is open
+     if election.status != ElectionStatus.OPEN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This election is not open",
+        )
+
+     # Get all proposals associated with the election
+     proposal_docs = (
+        db.collection("proposals")
+        .where("election_id", "==", election_id)
+        .stream()
+     )
+     proposals = [Proposal.model_validate(proposal_doc.to_dict()) for proposal_doc in proposal_docs]
+     
+     # If a winning proposal is not explicitly set, determine the winner based on the votes
+     if not winning_proposal_id:
+         votes_by_proposal = {}
+         for proposal in proposals:
+           vote_docs = (
+                db.collection("votes")
+                .where("proposal_id", "==", proposal.proposal_id)
+                .stream()
+            )
+           total_votes = sum([Vote.model_validate(vote_doc.to_dict()).tokens_used for vote_doc in vote_docs])
+           votes_by_proposal[proposal.proposal_id] = total_votes
+       
+         if not votes_by_proposal:
+            # If there are no votes for any proposal set winning proposal to None
+             winning_proposal_id = None
+         else:
+              # Find the proposal with the most votes
+             winning_proposal_id = max(votes_by_proposal, key=votes_by_proposal.get)
+
+     # Determine which strategy to use based on the payment and price options
+     if election.payment_options == "allpay" and election.price_options.startswith("1,"):
+         strategy = MostVotesWinsStrategy(price_strategy=FirstPriceCalculationStrategy(), payment_strategy=AllPayPaymentStrategy())
+     elif election.payment_options == "allpay" and election.price_options.startswith("1,"):
+         strategy = MostVotesWinsStrategy(price_strategy=SecondPriceCalculationStrategy(), payment_strategy=AllPayPaymentStrategy())
+     elif election.payment_options == "winnerspay" and election.price_options.startswith("1,"):
+         strategy = MostVotesWinsStrategy(price_strategy=FirstPriceCalculationStrategy(), payment_strategy=WinnersPayPaymentStrategy())
+     elif election.payment_options == "winnerspay" and election.price_options.startswith("2,"):
+        strategy = MostVotesWinsStrategy(price_strategy=SecondPriceCalculationStrategy(), payment_strategy=WinnersPayPaymentStrategy())
+     else:
+          raise Exception("invalid payment or price options")
+
+     # Get all memberships of the group so that the strategy can modify the token balance
+     membership_docs = (
+        db.collection("memberships")
+        .where("group_id", "==", group_id)
+        .stream()
+     )
+     memberships = {doc.to_dict().get("membership_id"):Membership.model_validate(doc.to_dict()) for doc in membership_docs}
+
+     vote_docs = (
+        db.collection("votes")
+        .where("election_id", "==", election_id)
+        .stream()
+      )
+     votes = [Vote.model_validate(vote_doc.to_dict()) for vote_doc in vote_docs]
+     
+
+     # Resolve the auction using the selected strategy
+     winning_proposal_id = await strategy.resolve_auction(election, proposals, votes, memberships, )
+
+
+     # Update the election document with status closed and set the winning proposal if it exists
+     updated_election_data = {
+         **election.model_dump(),
+          "status": ElectionStatus.CLOSED,
+          "winning_proposal_id": winning_proposal_id,
+          }
+     election_ref.set(updated_election_data)
+
+     # Fetch the updated election
+     updated_election_doc = election_ref.get()
+
+     if not updated_election_doc.exists:
+          raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update election document",
+        )
+
+     return Election.model_validate(updated_election_doc.to_dict())

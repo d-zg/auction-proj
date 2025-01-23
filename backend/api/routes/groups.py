@@ -19,6 +19,9 @@ class MemberWithDetails(BaseModel):
 class UpdateTokenBalanceRequest(BaseModel):
     token_balance: int
 
+class GroupCreate(BaseModel):
+    name: str
+    description: str = ""
 
 
 @router.get("/my-groups", response_model=List[Group])
@@ -53,7 +56,10 @@ async def get_my_groups(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/", response_model=Group, status_code=status.HTTP_201_CREATED)
-async def create_group(current_user: User = Depends(get_current_user)):
+async def create_group(
+    group_data: GroupCreate,
+    current_user: User = Depends(get_current_user)
+):
     """
     Creates a new group and a corresponding membership for the creator.
     """
@@ -63,17 +69,18 @@ async def create_group(current_user: User = Depends(get_current_user)):
     group_id = new_group_ref.id
 
     # Create the new group document
-    group_data = {
+    group_dict = {
         "group_id": group_id,
-        "name": "New Group",
-        "description": "",
+        "name": group_data.name,
+        "description": group_data.description,
         "created_at": datetime.now(),
         "updated_at": datetime.now(),
         "memberships": [f"{current_user.uid}_{group_id}"],  # Add the membership ID here
     }
 
+
     # Create a new Group instance using the data
-    group = Group(**group_data)
+    group = Group(**group_dict)
 
     new_group_ref.set(group.model_dump())
 

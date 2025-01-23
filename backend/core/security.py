@@ -14,6 +14,7 @@ if not os.path.exists("firebase_service_account.json"):
 try:
     cred = credentials.Certificate("firebase_service_account.json")
     firebase_admin = initialize_app(cred)
+    print("the fuck??")
 except ValueError:
     firebase_admin = get_app()
 
