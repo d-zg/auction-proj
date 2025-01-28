@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuthContext } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import Link from 'next/link';
 
 interface Group {
   group_id: string;
@@ -21,13 +22,11 @@ const GroupsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-   useEffect(() => {
-     // Redirect to the home page if the user is not logged in
-    if ( user == null ) {
-        router.push( "/" );
-    }
-  }, [ user, router ] );
-
+    useEffect(() => {
+        if(user == null) {
+            router.push("/")
+        }
+    }, [user, router])
 
   useEffect(() => {
       const fetchGroups = async () => {
@@ -150,7 +149,9 @@ const GroupsPage: React.FC = () => {
             <ul className="space-y-4">
                 {groups.map(group => (
                     <li key={group.group_id} className="bg-white shadow rounded p-4">
-                        <h2 className="text-xl font-semibold">{group.name}</h2>
+                         <Link href={`/groups/${group.group_id}`} >
+                             <h2 className="text-xl font-semibold hover:underline cursor-pointer">{group.name}</h2>
+                         </Link>
                         <p className="text-gray-700">{group.description}</p>
                         <p className="text-gray-500">
                              Created At: {new Date(group.created_at).toLocaleString()}
