@@ -1,41 +1,6 @@
 // src/api/groups.ts
 import { api } from '@/lib/api';
-
-interface Group {
-  group_id: string;
-  name: string;
-  description: string;
-  created_at: string;
-  updated_at: string;
-  memberships: string[];
-  elections: string[];
-}
-
-interface MemberWithDetails {
-  user: {
-    uid: string;
-    email: string;
-  };
-  membership: {
-    membership_id: string;
-    user_id: string;
-    group_id: string;
-    token_balance: number;
-    role: string;
-    created_at: string;
-    updated_at: string;
-  };
-}
-
-interface Election {
-  election_id: string;
-  group_id: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  payment_options: string;
-  price_options: string;
-}
+import { Group, MemberWithDetails, Election } from '@/models/models'; // Import from models.ts
 
 export const getGroupDetails = async (groupId: string, token: string): Promise<Group> => {
   const response = await api.get(`/groups/${groupId}`, {

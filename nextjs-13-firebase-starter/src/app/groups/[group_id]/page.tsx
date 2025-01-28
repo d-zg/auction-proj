@@ -7,46 +7,7 @@ import { usePathname } from 'next/navigation';
 import InviteUserModal from './components/InviteUserModal';
 import StartElectionModal from './components/StartElectionModal';
 import { getGroupDetails, getGroupMembers, getGroupElections } from '@/api/groups';
-
-interface User {
-  uid: string;
-  email: string;
-}
-
-interface Membership {
-  membership_id: string;
-  user_id: string;
-  group_id: string;
-  token_balance: number;
-  role: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface MemberWithDetails {
-  user: User;
-  membership: Membership;
-}
-
-interface Group {
-  group_id: string;
-  name: string;
-  description: string;
-  created_at: string;
-  updated_at: string;
-  memberships: string[];
-  elections: string[];
-}
-
-interface Election {
-  election_id: string;
-  group_id: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  payment_options: string;
-  price_options: string;
-}
+import { User, Membership, MemberWithDetails, Group, Election } from '@/models/models'; //
 
 const GroupDetailsPage: React.FC = () => {
   const { user } = useAuthContext() as { user: any };
