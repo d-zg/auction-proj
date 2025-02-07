@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from models import Group, Membership, User
+from models import Group, TokenSettings, Membership, User
 from db import db
 from core.security import get_current_user
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -11,6 +11,7 @@ router = APIRouter()
 class GroupUpdate(BaseModel):
     name: str
     description: str
+    token_settings: Optional[TokenSettings] = None
 
 class MemberWithDetails(BaseModel):
     user: User
@@ -76,6 +77,12 @@ async def create_group(
         "created_at": datetime.now(),
         "updated_at": datetime.now(),
         "memberships": [f"{current_user.uid}_{group_id}"],  # Add the membership ID here
+        "token_settings" : {
+            "regeneration_rate": 1,
+            "regeneration_interval": "election",
+            "max_tokens": 10,
+            "initial_tokens": 5
+        }
     }
 
 

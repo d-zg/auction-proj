@@ -68,6 +68,7 @@ export interface ProposalCreate {
 }
 
 export interface ElectionCreate {
+  name: string;
   start_date: string;
   end_date: string;
   payment_options: string;

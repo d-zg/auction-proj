@@ -46,27 +46,32 @@ export const inviteUserToGroup = async (groupId: string, email: string, token: s
 };
 
 export const startElection = async (
-  groupId: string,
-  startDate: string,
-  endDate: string,
-  paymentOptions: string,
-  priceOptions: string,
-  token: string
-) => {
-  const response = await api.post(
-    `/groups/${groupId}/elections`,
-    {
-      start_date: startDate,
-      end_date: endDate,
-      payment_options: paymentOptions,
-      price_options: priceOptions,
-      proposals: [{ title: 'Proposal 1' }, { title: 'Proposal 2' }],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
+    name: string,
+    groupId: string,
+    startDate: string,
+    endDate: string,
+    paymentOptions: string,
+    priceOptions: string,
+    proposals: string[], // Array of proposal titles
+    token: string
+  ) => {
+    const formattedProposals = proposals.map((title) => ({ title }));
+  
+    const response = await api.post(
+      `/groups/${groupId}/elections`,
+      {
+        name: name,
+        start_date: startDate,
+        end_date: endDate,
+        payment_options: paymentOptions,
+        price_options: priceOptions,
+        proposals: formattedProposals, // Send formatted proposals
       },
-    }
-  );
-  return response;
-};
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response;
+  };

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+// src/components/StartElectionModal.tsx
+import { useState, KeyboardEvent } from 'react';
 import { startElection } from '@/api/groups';
 
 interface StartElectionModalProps {
@@ -16,15 +17,23 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
   user,
   fetchGroupDetails,
 }) => {
+  const [name, setName] = useState<string>(''); // Election name
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date(new Date().getTime() + 60 * 60 * 1000));
-  const [paymentOptions, setPaymentOptions] = useState('allpay');
-  const [priceOptions, setPriceOptions] = useState('1,2,3');
+  const [paymentOptions, setPaymentOptions] = useState<string>('allpay');
+  const [priceOptions, setPriceOptions] = useState<string>('1,2,3');
+  const [proposals, setProposals] = useState<string[]>([]); // Proposals list
+  const [newProposal, setNewProposal] = useState<string>(''); // Current proposal input
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const handleStartElection = async () => {
     if (!user) return;
+
+    if (proposals.length === 0) {
+      setError('Please add at least one proposal.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -32,16 +41,18 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
     try {
       const token = await user.getIdToken();
       const response = await startElection(
+        name, // Election name
         groupId,
         startDate.toISOString(),
         endDate.toISOString(),
         paymentOptions,
         priceOptions,
+        proposals, // User-submitted proposals
         token
       );
 
       if (response.status === 201) {
-        alert(`Successfully started election`);
+        alert(`Successfully started election "${name}"`);
         onClose();
         fetchGroupDetails();
       } else {
@@ -53,6 +64,10 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setName(e.target.value);
   };
 
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,13 +82,53 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
     setEndDate(new Date(e.target.value));
   };
 
+  const handleNewProposalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewProposal(e.target.value);
+  };
+
+  const addProposal = () => {
+    const trimmedProposal = newProposal.trim();
+    if (trimmedProposal && !proposals.includes(trimmedProposal)) {
+      setProposals([...proposals, trimmedProposal]);
+      setNewProposal('');
+    }
+  };
+
+  const removeProposal = (proposalToRemove: string) => {
+    setProposals(proposals.filter((proposal) => proposal !== proposalToRemove));
+  };
+
+  const handleProposalKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addProposal();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
-      <div className="bg-white p-8 rounded shadow-lg">
+      <div className="bg-white p-8 rounded shadow-lg w-full max-w-md">
         <h2 className="text-2xl font-bold mb-4">Start Election</h2>
 
+        {/* Election Name Input */}
+        <div className="mb-4">
+          <label htmlFor="electionName" className="block text-gray-700 text-sm font-bold mb-2">
+            Election Name
+          </label>
+          <input
+            type="text"
+            id="electionName"
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            value={name}
+            onChange={handleNameChange}
+            placeholder="Enter election name"
+            required
+          />
+        </div>
+
+        {/* Start Date/Time Input */}
         <div className="mb-4">
           <label htmlFor="startDate" className="block text-gray-700 text-sm font-bold mb-2">
             Start Date/Time
@@ -87,6 +142,7 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
           />
         </div>
 
+        {/* End Date/Time Input */}
         <div className="mb-4">
           <label htmlFor="endDate" className="block text-gray-700 text-sm font-bold mb-2">
             End Date/Time
@@ -100,6 +156,7 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
           />
         </div>
 
+        {/* Payment Options Select */}
         <div className="mb-4">
           <label htmlFor="paymentOptions" className="block text-gray-700 text-sm font-bold mb-2">
             Payment Options
@@ -115,6 +172,7 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
           </select>
         </div>
 
+        {/* Price Options Select */}
         <div className="mb-4">
           <label htmlFor="priceOptions" className="block text-gray-700 text-sm font-bold mb-2">
             Price Options
@@ -131,8 +189,51 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
           </select>
         </div>
 
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+        {/* Proposals Input */}
+        <div className="mb-4">
+          <label htmlFor="proposals" className="block text-gray-700 text-sm font-bold mb-2">
+            Proposals
+          </label>
+          <div className="flex">
+            <input
+              type="text"
+              id="proposals"
+              className="shadow appearance-none border rounded-l w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              value={newProposal}
+              onChange={handleNewProposalChange}
+              onKeyDown={handleProposalKeyDown}
+              placeholder="Enter proposal title"
+            />
+            <button
+              type="button"
+              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-r"
+              onClick={addProposal}
+            >
+              Add
+            </button>
+          </div>
+          {proposals.length > 0 && (
+            <ul className="mt-2">
+              {proposals.map((proposal, index) => (
+                <li key={index} className="flex justify-between items-center bg-gray-100 p-2 rounded mb-2">
+                  <span>{proposal}</span>
+                  <button
+                    type="button"
+                    className="text-red-500 hover:text-red-700"
+                    onClick={() => removeProposal(proposal)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
+        {/* Error Message */}
+        {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+
+        {/* Action Buttons */}
         <div className="flex justify-end">
           <button
             disabled={loading}
@@ -142,8 +243,12 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
             Cancel
           </button>
           <button
-            disabled={loading}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            disabled={loading || name.trim() === '' || proposals.length === 0}
+            className={`${
+              loading || name.trim() === '' || proposals.length === 0
+                ? 'bg-blue-300 cursor-not-allowed'
+                : 'bg-blue-500 hover:bg-blue-700'
+            } text-white font-bold py-2 px-4 rounded`}
             onClick={handleStartElection}
           >
             {loading ? 'Starting...' : 'Start'}

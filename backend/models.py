@@ -9,6 +9,13 @@ class User(BaseModel):
     memberships: List["Membership"] = []
     # Add other relevant fields based on your user data
 
+# Represents settings for group
+class TokenSettings(BaseModel):
+    regeneration_rate: float
+    regeneration_interval: str
+    max_tokens: int
+    initial_tokens: int
+
 # --- Group Model ---
 class Group(BaseModel):
     group_id: str
@@ -18,6 +25,7 @@ class Group(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
     memberships: List[str] = []  # Relationship: Group has many Memberships -- stored as ID
     elections: List[str] = []  # Relationship: Group has many Elections -- stored as ID
+    token_settings: Optional[TokenSettings] = None
 
 # --- Membership Model ---
 class Membership(BaseModel):
@@ -42,6 +50,7 @@ class ElectionStatus(str, Enum):
 # --- Election Model ---
 class Election(BaseModel):
     election_id: str
+    election_name: str
     group_id: str  # Relationship: Election belongs to Group (replace with reference if needed)
     start_date: datetime
     end_date: datetime

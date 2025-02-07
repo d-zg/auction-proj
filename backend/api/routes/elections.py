@@ -36,6 +36,7 @@ class ProposalCreate(BaseModel):
 
 
 class ElectionCreate(BaseModel):
+    name: str
     start_date: datetime
     end_date: datetime
     payment_options: str 
@@ -58,7 +59,7 @@ class ElectionDetailsResponse(BaseModel):
     proposals: List[dict]
 
 
-@router.post("/", response_model=Election, status_code=status.HTTP_201_CREATED)
+@router.post("/",  status_code=status.HTTP_201_CREATED)
 async def create_election(
     group_id: str,
     election_data: ElectionCreate,
@@ -114,6 +115,7 @@ async def create_election(
 
     # Create the new election document
     election = Election(
+        election_name=election_data.name,
         election_id=election_id,
         group_id=group_id,
         start_date=election_data.start_date,
