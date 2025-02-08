@@ -158,3 +158,24 @@ async def remove_member_from_group(
     group_ref.update({"memberships": firestore.ArrayRemove([membership_id])})
 
     return None
+
+
+@router.get("/groups/{group_id}/me", response_model=Membership)
+async def get_my_membership(
+    group_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieves the membership details of the currently authenticated user in a specific group.
+    """
+    membership_id = f"{current_user.uid}_{group_id}"
+    membership_ref = db.collection("memberships").document(membership_id)
+    membership_doc = membership_ref.get()
+
+    if not membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Membership not found"
+        )
+
+    return Membership.model_validate(membership_doc.to_dict())

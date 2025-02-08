@@ -1,6 +1,6 @@
 // src/api/groups.ts
 import { api } from '@/lib/api';
-import { Group, MemberWithDetails, Election } from '@/models/models'; // Import from models.ts
+import { Group, Membership, MemberWithDetails, Election } from '@/models/models'; // Import from models.ts
 
 export const getGroupDetails = async (groupId: string, token: string): Promise<Group> => {
   const response = await api.get(`/groups/${groupId}`, {
@@ -75,3 +75,27 @@ export const startElection = async (
     );
     return response;
   };
+
+export const getMembershipDetails = async (groupId: string, token: string): Promise<Membership> => {
+  const response = await api.get(`/memberships/groups/${groupId}/me`, { // Assuming you have a "me" endpoint on backend for memberships
+      headers: {
+          Authorization: `Bearer ${token}`,
+      },
+  });
+  return response.data;
+};
+
+    
+export const updateMemberTokenBalance = async (
+  groupId: string,
+  userId: string,
+  requestBody: { token_balance: number },
+  token: string
+): Promise<Membership> => {
+  const response = await api.patch(`/groups/${groupId}/members/${userId}/token-balance`, requestBody, {
+      headers: {
+          Authorization: `Bearer ${token}`,
+      },
+  });
+  return response.data;
+};

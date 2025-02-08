@@ -254,6 +254,93 @@ async def add_proposal_to_election(
     return Proposal.model_validate(proposal_doc.to_dict())
 
 
+@router.delete("/{election_id}/proposals/{proposal_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_proposal_from_election(
+    group_id: str,
+    election_id: str,
+    proposal_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Deletes a proposal from an election.
+    Only admins of the group can delete proposals.
+    """
+
+    # Check if the current user is an admin of the group
+    current_user_membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
+    current_user_membership_doc = current_user_membership_ref.get()
+
+    if not current_user_membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group",
+        )
+
+    current_user_membership = Membership.model_validate(current_user_membership_doc.to_dict())
+
+    if current_user_membership.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can delete proposals from elections",
+        )
+
+    # Get the election
+    election_ref = db.collection("elections").document(election_id)
+    election_doc = election_ref.get()
+
+    if not election_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Election not found"
+        )
+
+    election = Election.model_validate(election_doc.to_dict())
+
+    if election.group_id != group_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Election does not belong to this group",
+        )
+
+    # Get the proposal
+    proposal_ref = db.collection("proposals").document(proposal_id)
+    proposal_doc = proposal_ref.get()
+
+    if not proposal_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Proposal not found"
+        )
+
+    proposal = Proposal.model_validate(proposal_doc.to_dict())
+
+    if proposal.election_id != election_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Proposal does not belong to this election",
+        )
+
+    # Delete the proposal document
+    proposal_ref.delete()
+
+    # Remove the proposal_id from the election's proposals array
+    election_ref = db.collection("elections").document(election_id)
+    election_ref.update({"proposals": firestore.ArrayRemove([proposal_id])})
+
+    # Delete any votes associated with the proposal
+    vote_docs = (
+        db.collection("votes")
+        .where("proposal_id", "==", proposal_id)
+        .stream()
+    )
+    batch = db.batch()
+    for vote_doc in vote_docs:
+        vote_ref = db.collection("votes").document(vote_doc.id)
+        batch.delete(vote_ref)
+    batch.commit()
+
+    return None
+
 
 @router.post("/{election_id}/votes", response_model=Vote)
 async def cast_vote(

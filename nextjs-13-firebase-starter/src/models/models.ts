@@ -32,6 +32,7 @@ export interface MemberWithDetails {
 }
 
 export interface Election {
+  election_name: string;
   election_id: string;
   group_id: string;
   start_date: string;

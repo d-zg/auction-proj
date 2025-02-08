@@ -87,3 +87,18 @@ export const closeElection = async (
     );
     return response.data;
 };
+
+
+export const deleteProposal = async (
+  groupId: string,
+  electionId: string,
+  proposalId: string,
+  token: string
+): Promise<void> => {
+  const response = await api.delete(`/groups/${groupId}/elections/${electionId}/proposals/${proposalId}`, {
+      headers: {
+          Authorization: `Bearer ${token}`,
+      },
+  });
+  return response.data; // Or just return void if you don't need response data
+};
