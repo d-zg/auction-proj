@@ -1,7 +1,8 @@
 # backend/core/election_state_manager.py
+import pdb
 from datetime import datetime, timezone
 from google.cloud import firestore
-from models import Election, ElectionStatus
+from models import Election, ElectionStatus, Group
 from strategies.auction_resolution import ( # Import strategies if needed for closing
     AuctionResolutionStrategy,
     MostVotesWinsStrategy,

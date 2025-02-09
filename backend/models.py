@@ -39,7 +39,8 @@ class Membership(BaseModel):
     user: Optional[User] = None  # Relationship: Membership belongs to User
     group: Optional[Group] = None  # Relationship: Membership belongs to Group
     votes: List["Vote"] = []  # Relationship: Membership has many Votes
-
+    last_token_regeneration: datetime = Field(default_factory=datetime.now)
+        
 # --- Election Model ---
 class ElectionStatus(str, Enum):
     OPEN = "open"

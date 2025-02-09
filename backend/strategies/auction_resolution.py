@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from models import Election, Proposal, Vote, Membership
+from models import Election, Proposal, Vote, Membership, Group
 from typing import List, Dict, Optional, Tuple
 from google.cloud import firestore
 from db import db
@@ -128,6 +128,22 @@ class AllPayPaymentStrategy(PaymentApplicationStrategy):
                 if new_balance < 0:
                     # should log this somewhere so that admins know that something has gone wrong
                     new_balance = 0
+
+                group_id = membership.group_id
+                group_ref = db.collection("groups").document(group_id)
+                group_doc = group_ref.get()
+
+                if group_doc.exists:
+                    group = Group.model_validate(group_doc.to_dict())
+
+                token_settings = group.token_settings
+
+                if token_settings.regeneration_interval == "election":
+        # Election Regeneration - handled after election closure, not here
+                    tokens_to_add = token_settings.regeneration_rate
+
+                new_balance = min(new_balance + tokens_to_add, token_settings.max_tokens)
+
                 membership_ref.update({"token_balance": new_balance})
 
 class WinnersPayPaymentStrategy(PaymentApplicationStrategy):
@@ -142,6 +158,21 @@ class WinnersPayPaymentStrategy(PaymentApplicationStrategy):
             if membership and vote.proposal_id == winning_proposal_id:
                 membership_ref = db.collection("memberships").document(membership.membership_id)
                 new_balance = membership.token_balance - vote.tokens_used
+
+                group_id = membership.group_id
+                group_ref = db.collection("groups").document(group_id)
+                group_doc = group_ref.get()
+
+                if group_doc.exists:
+                    group = Group.model_validate(group_doc.to_dict())
+
+                token_settings = group.token_settings
+
+                if token_settings.regeneration_interval == "election":
+        # Election Regeneration - handled after election closure, not here
+                    tokens_to_add = token_settings.regeneration_rate
+
+                new_balance = min(new_balance + tokens_to_add, token_settings.max_tokens)
 
                 if new_balance < 0:
                     # should log this somewhere so that admins know that something has gone wrong

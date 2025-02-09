@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from models import Group, Membership, User
 from db import db
 from core.security import get_current_user
+from core.token_manager import regenerate_tokens_for_membership # Import token regeneration function
 from typing import List
 from pydantic import BaseModel
 from google.cloud import firestore
@@ -159,7 +160,6 @@ async def remove_member_from_group(
 
     return None
 
-
 @router.get("/groups/{group_id}/me", response_model=Membership)
 async def get_my_membership(
     group_id: str,
@@ -178,4 +178,24 @@ async def get_my_membership(
             detail="Membership not found"
         )
 
-    return Membership.model_validate(membership_doc.to_dict())
+    membership = Membership.model_validate(membership_doc.to_dict())
+
+    # Fetch the associated group to get token settings
+    group_ref = db.collection("groups").document(group_id)
+    group_doc = group_ref.get()
+    if not group_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found" # Should not happen if membership exists
+        )
+    group = Group.model_validate(group_doc.to_dict())
+
+
+    # --- TOKEN REGENERATION ---
+    if group.token_settings and group.token_settings.regeneration_interval != "election":
+        updated_membership = await regenerate_tokens_for_membership(membership, group) # Regenerate tokens
+    # --- END TOKEN REGENERATION ---
+    else:
+        updated_membership = membership
+
+    return updated_membership # Return the updated membership
