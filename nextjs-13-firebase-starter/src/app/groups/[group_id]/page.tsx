@@ -103,6 +103,10 @@ const GroupDetailsPage: React.FC = () => {
 
     return (
         <div className="container mx-auto p-4">
+            <Link href={`/groups`} className="inline-block mb-4 text-blue-500 hover:underline">
+                ← Back to Groups
+            </Link>
+
             <h1 className="text-2xl font-bold mb-4">{group.name}</h1>
             <p className="text-gray-700 mb-4">{group.description}</p>
 
@@ -115,10 +119,14 @@ const GroupDetailsPage: React.FC = () => {
                             <span className="mr-2">{member.user.email}</span>
                             <span className="text-sm text-gray-600">({member.membership.role})</span>
                         </div>
+                        <div className="text-sm text-gray-600">
+                            Tokens: {member.membership.token_balance}
+                        </div>
                         {isAdmin && (
                             <button
                                 onClick={() => handleOpenEditTokenModal(member)}
                                 className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-sm"
+                                aria-label={`Edit tokens for ${member.user.email}`}
                             >
                                 Edit Tokens
                             </button>

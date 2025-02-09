@@ -116,3 +116,39 @@ export const getMyVoteForElection = async (
   });
   return response.data;
 };
+
+
+export const closeElectionEarly = async (
+  groupId: string,
+  electionId: string,
+  token: string
+): Promise<Election> => {
+  const response = await api.put(
+      `/groups/${groupId}/elections/${electionId}/close-early`, // New endpoint
+      {}, // No request body needed
+      {
+          headers: {
+              Authorization: `Bearer ${token}`,
+          },
+      }
+  );
+  return response.data;
+};
+
+
+export const startElectionNow = async (
+  groupId: string,
+  electionId: string,
+  token: string
+): Promise<Election> => {
+  const response = await api.put(
+      `/groups/${groupId}/elections/${electionId}/start-now`, // New endpoint
+      {}, // No request body needed
+      {
+          headers: {
+              Authorization: `Bearer ${token}`,
+          },
+      }
+  );
+  return response.data;
+};
