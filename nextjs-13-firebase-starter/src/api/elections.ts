@@ -102,3 +102,17 @@ export const deleteProposal = async (
   });
   return response.data; // Or just return void if you don't need response data
 };
+
+
+export const getMyVoteForElection = async (
+  groupId: string,
+  electionId: string,
+  token: string
+): Promise<Vote | null> => {
+  const response = await api.get(`/groups/${groupId}/elections/${electionId}/my-vote`, {
+      headers: {
+          Authorization: `Bearer ${token}`,
+      },
+  });
+  return response.data;
+};
