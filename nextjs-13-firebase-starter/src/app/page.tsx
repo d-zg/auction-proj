@@ -12,7 +12,6 @@ export default function Home() {
           transparent and token-based voting.
         </p>
         {/* Interactive Image/Animation Placeholder - Replace with your actual image/animation */}
-
         <div className="flex space-x-4 justify-center mb-8"> {/* Centered buttons container */}
           <Link href="/signin" className="inline-block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full focus:outline-none focus:shadow-outline"> {/* Styled sign-in button */}
             Sign In
