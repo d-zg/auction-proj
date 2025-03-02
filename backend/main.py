@@ -36,6 +36,16 @@ async def log_request_latency(request: Request, call_next):
     logger.info(f"{request.method} {request.url} completed in {duration:.2f} seconds")
     return response
 
+
+@app.get("/healthz")
+async def health_check():
+    """
+    Health check endpoint for Render.
+    Returns 200 OK if the application is healthy.
+    """
+    return {"status": "ok"}
+
+
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
