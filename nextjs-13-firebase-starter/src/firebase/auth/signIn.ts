@@ -1,3 +1,4 @@
+// File: nextjs-13-firebase-starter/src/firebase/auth/signIn.ts
 import firebase_app from "../config";
 import { signInWithEmailAndPassword, getAuth } from "firebase/auth";
 
@@ -11,6 +12,9 @@ export default async function signIn(email: string, password: string) {
 
   try {
     result = await signInWithEmailAndPassword(auth, email, password); // Sign in with email and password
+      if (result && result.user) {
+        await result.user.getIdToken(true); // Force refresh the ID token
+      }
   } catch (e) {
     error = e; // Catch and store any error that occurs during sign-in
   }

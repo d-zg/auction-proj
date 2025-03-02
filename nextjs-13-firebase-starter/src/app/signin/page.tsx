@@ -2,6 +2,7 @@
 import signIn from "@/firebase/auth/signIn";
 import { useRouter } from 'next/navigation';
 import { useState } from "react";
+import Link from 'next/link'; // Import Link
 
 function Page(): JSX.Element {
   const [ email, setEmail ] = useState( '' );
@@ -24,18 +25,16 @@ function Page(): JSX.Element {
     // Sign in successful
     console.log( result );
 
-    // Redirect to the admin page
-    // Typically you would want to redirect them to a protected page an add a check to see if they are admin or 
-    // create a new page for admin
-    router.push( "/admin" );
+    // Redirect to the groups page
+    router.push( "/groups" ); // Changed redirect to /groups
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen">
-      <div className="w-full max-w-xs">
-        <form onSubmit={handleForm} className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-          <h1 className="text-3xl font-bold mb-6 text-black">Sign In</h1>
-          <div className="mb-4">
+    <div className="flex flex-col items-center justify-center h-screen bg-gray-100"> {/* Added background for visual appeal */}
+      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-xl"> {/* Container for sign-in form with styling */}
+        <h1 className="text-3xl font-bold mb-6 text-gray-800 text-center">Sign In</h1> {/* Centered title */}
+        <form onSubmit={handleForm} className="space-y-4">
+          <div>
             <label htmlFor="email" className="block text-gray-700 text-sm font-bold mb-2">
               Email
             </label>
@@ -49,7 +48,7 @@ function Page(): JSX.Element {
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
-          <div className="mb-6">
+          <div>
             <label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">
               Password
             </label>
@@ -63,15 +62,16 @@ function Page(): JSX.Element {
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
-          <div className="flex items-center justify-between">
-            <button
-              type="submit"
-              className="w-full bg-blue-500 text-white font-semibold py-2 rounded"
-            >
-              Sign In
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 rounded focus:outline-none focus:shadow-outline" // Added focus styles
+          >
+            Sign In
+          </button>
         </form>
+        <div className="mt-4 text-sm text-gray-600 text-center"> {/* Added register link below form */}
+          Don't have an account? <Link href="/signup" className="text-blue-500 hover:text-blue-700">Sign Up</Link>
+        </div>
       </div>
     </div>
   );

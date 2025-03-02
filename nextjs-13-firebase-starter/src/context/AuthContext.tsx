@@ -47,7 +47,7 @@ export function AuthContextProvider( { children }: AuthContextProviderProps ): J
 
   // Provide the authentication context to child components
   return (
-    <AuthContext.Provider value={{ user }}>
+    <AuthContext.Provider value={{ user, setUser }}> {/* Include setUser in value */}
       {loading ? <div>Loading...</div> : children}
     </AuthContext.Provider>
   );
