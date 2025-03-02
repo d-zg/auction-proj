@@ -48,7 +48,7 @@ function Page(): JSX.Element {
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
-          <div>
+          <div className="mb-6">
             <label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">
               Password
             </label>
@@ -70,7 +70,7 @@ function Page(): JSX.Element {
           </button>
         </form>
         <div className="mt-4 text-sm text-gray-600 text-center"> {/* Added register link below form */}
-          Don't have an account? <Link href="/signup" className="text-blue-500 hover:text-blue-700">Sign Up</Link>
+          Do you have an account? <Link href="/signup" className="text-blue-500 hover:text-blue-700">Sign Up</Link>
         </div>
       </div>
     </div>
