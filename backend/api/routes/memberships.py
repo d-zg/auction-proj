@@ -1,3 +1,4 @@
+# File: backend/api/routes/memberships.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from models import Group, Membership, User
 from db import db
@@ -74,18 +75,32 @@ async def add_member_to_group(
             detail="User is already a member of this group",
         )
 
+    # Fetch the group to get token settings
+    group_ref = db.collection("groups").document(group_id)
+    group_doc = group_ref.get()
+
+    if not group_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found", # Should not happen, but safety check
+        )
+    group = Group.model_validate(group_doc.to_dict())
+
+    initial_tokens = 0  # Default to 0 if token settings or initial_tokens is missing
+    if group.token_settings and group.token_settings.initial_tokens is not None:
+        initial_tokens = group.token_settings.initial_tokens
+
     # Create the new membership
     new_membership = Membership(
         membership_id=membership_id,
         user_id=user_to_add.uid,
         group_id=group_id,
-        token_balance=0,  # Or some initial value
+        token_balance=initial_tokens,  # Use initial tokens from group settings
         role="member",  # Or some default role
     )
     membership_ref.set(new_membership.model_dump())
 
     # Add the membership to the group's memberships array
-    group_ref = db.collection("groups").document(group_id)
     group_ref.update({"memberships": firestore.ArrayUnion([membership_id])})
 
     return new_membership
@@ -102,7 +117,7 @@ async def remove_member_from_group(
     Only admins of a group or the user themselves can remove a membership.
     """
     email_to_remove = request.email_to_remove
-    
+
     # Find the user to remove by email
     users_ref = db.collection("users")
     query = users_ref.where("email", "==", email_to_remove)

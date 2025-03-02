@@ -11,7 +11,9 @@ router = APIRouter()
 class GroupUpdate(BaseModel):
     name: str
     description: str
-    token_settings: Optional[TokenSettings] = None
+
+class TokenSettingsUpdate(BaseModel):
+    token_settings: TokenSettings
 
 class MemberWithDetails(BaseModel):
     user: User
@@ -63,7 +65,7 @@ async def create_group(
 ):
     """
     Creates a new group and a corresponding membership for the creator.
-    """
+     """
 
     # Add a new document with a generated ID
     new_group_ref = db.collection("groups").document()
@@ -104,7 +106,7 @@ async def create_group(
 
     return group
 
-    
+
 @router.get("/{group_id}/members", response_model=List[MemberWithDetails])
 async def get_group_members_with_details(
     group_id: str,
@@ -159,7 +161,7 @@ async def get_group_details(group_id: str, current_user: User = Depends(get_curr
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Current user is not a member of this group"
         )
-    
+
     group_ref = db.collection("groups").document(group_id)
     group_doc = group_ref.get()
 
@@ -168,7 +170,7 @@ async def get_group_details(group_id: str, current_user: User = Depends(get_curr
              status_code=status.HTTP_404_NOT_FOUND,
              detail="Group not found"
          )
-    
+
     group = Group.model_validate(group_doc.to_dict())
     return group
 
@@ -210,7 +212,7 @@ async def update_group(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Group not found",
         )
-    
+
     existing_group = group_doc.to_dict()
 
     # Update the group with new name and description and updated_at
@@ -225,6 +227,59 @@ async def update_group(
 
     # Return the updated group
     return Group.model_validate(updated_group_data)
+
+
+@router.put("/{group_id}/token-settings", response_model=Group)
+async def update_group_token_settings(
+    group_id: str,
+    token_settings_update: TokenSettingsUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Updates the token settings of a specific group.
+
+    Only admins of the group can update the token settings.
+    """
+    # Check if the current user is an admin of the group
+    current_user_membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
+    current_user_membership_doc = current_user_membership_ref.get()
+
+    if not current_user_membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group",
+        )
+
+    current_user_membership = Membership.model_validate(current_user_membership_doc.to_dict())
+
+    if current_user_membership.role != "admin":
+         raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can update group token settings",
+        )
+
+    # Retrieve the existing group document
+    group_ref = db.collection("groups").document(group_id)
+    group_doc = group_ref.get()
+
+    if not group_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found",
+        )
+
+    # Update the group with new token settings and updated_at
+    updated_group_data = {
+        **group_doc.to_dict(), # start with existing data to preserve other fields
+        "token_settings": token_settings_update.token_settings.model_dump(),
+        "updated_at": datetime.now()
+    }
+
+    group_ref.set(updated_group_data)
+
+    # Return the updated group
+    return Group.model_validate(updated_group_data)
+
 
 @router.patch("/{group_id}/members/{user_id}/token-balance", response_model=Membership)
 async def update_member_token_balance(
@@ -256,7 +311,7 @@ async def update_member_token_balance(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can update member's token balances",
         )
-    
+
     # Retrieve the membership document
     membership_id = f"{user_id}_{group_id}"
     membership_ref = db.collection("memberships").document(membership_id)
@@ -267,7 +322,7 @@ async def update_member_token_balance(
              status_code=status.HTTP_404_NOT_FOUND,
              detail="Membership not found",
          )
-    
+
     existing_membership = membership_doc.to_dict()
 
     # Update the token balance

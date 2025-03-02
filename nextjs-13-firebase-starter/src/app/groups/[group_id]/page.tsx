@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import InviteUserModal from './components/InviteUserModal';
 import StartElectionModal from './components/StartElectionModal';
 import EditTokenBalanceModal from './components/EditTokenBalanceModal'; // Import the new modal
+import EditTokenSettingsModal from './components/EditTokenSettingsModal';
 import ElectionList from './components/ElectionList';
 import { getGroupDetails, getGroupMembers, getGroupElections } from '@/api/groups';
 import { User, Membership, MemberWithDetails, Group, Election } from '@/models/models'; //
@@ -25,6 +26,7 @@ const GroupDetailsPage: React.FC = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [isStartElectionModalOpen, setIsStartElectionModalOpen] = useState(false);
     const [isEditTokenModalOpen, setIsEditTokenModalOpen] = useState(false); // State for EditTokenBalanceModal
+    const [isEditTokenSettingsModalOpen, setIsEditTokenSettingsModalOpen] = useState(false); // State for EditTokenSettingsModal
     const [memberToEdit, setMemberToEdit] = useState<MemberWithDetails | null>(null); // State to track member being edited
 
     const groupId = pathname.split('/')[2];
@@ -87,6 +89,9 @@ const GroupDetailsPage: React.FC = () => {
         setIsEditTokenModalOpen(false);
         setMemberToEdit(null); // Clear member to edit when modal closes
     };
+
+    const handleOpenEditTokenSettingsModal = () => setIsEditTokenSettingsModalOpen(true);
+    const handleCloseEditTokenSettingsModal = () => setIsEditTokenSettingsModalOpen(false);
 
 
     if (loading) {
@@ -155,6 +160,16 @@ const GroupDetailsPage: React.FC = () => {
                 </button>
             )}
 
+            {/* Edit Token Settings Button (only for admins) */}
+            {isAdmin && (
+                <button
+                    onClick={handleOpenEditTokenSettingsModal}
+                    className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded mb-4 ml-4"
+                >
+                    Edit Token Settings
+                </button>
+            )}
+
             {/* Elections Section */}
             <h2 className="text-xl font-semibold mb-2">Elections</h2>
             {elections.length > 0 ? (
@@ -189,6 +204,14 @@ const GroupDetailsPage: React.FC = () => {
                 onClose={handleCloseEditTokenModal}
                 groupId={groupId}
                 member={memberToEdit}
+                user={user}
+                fetchGroupDetails={fetchGroupData}
+            />
+             {/* Edit Token Settings Modal */}
+             <EditTokenSettingsModal
+                isOpen={isEditTokenSettingsModalOpen}
+                onClose={handleCloseEditTokenSettingsModal}
+                groupId={groupId}
                 user={user}
                 fetchGroupDetails={fetchGroupData}
             />
