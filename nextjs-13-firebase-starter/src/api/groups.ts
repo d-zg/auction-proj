@@ -56,7 +56,7 @@ export const startElection = async (
     token: string
   ) => {
     const formattedProposals = proposals.map((title) => ({ title }));
-  
+
     const response = await api.post(
       `/groups/${groupId}/elections`,
       {
@@ -85,7 +85,19 @@ export const getMembershipDetails = async (groupId: string, token: string): Prom
   return response.data;
 };
 
-    
+export const updateGroupTokenSettings = async (
+  groupId: string,
+  tokenSettings: any, // Replace 'any' with a more specific type if you have one
+  token: string
+): Promise<Group> => {
+  const response = await api.put(`/groups/${groupId}/token-settings`, { token_settings: tokenSettings }, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.data;
+};
+
 export const updateMemberTokenBalance = async (
   groupId: string,
   userId: string,
@@ -98,4 +110,14 @@ export const updateMemberTokenBalance = async (
       },
   });
   return response.data;
+};
+
+export const removeUserFromGroup = async (groupId: string, email: string, token: string) => {
+    const response = await api.delete(`/memberships/groups/${groupId}/members`, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        data: { email_to_remove: email } // Send email in the request body
+    });
+    return response;
 };

@@ -1,5 +1,5 @@
 // src/components/StartElectionModal.tsx
-import { useState, KeyboardEvent } from 'react';
+import { useState, KeyboardEvent, useEffect } from 'react';
 import { startElection } from '@/api/groups';
 
 interface StartElectionModalProps {
@@ -18,14 +18,20 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
   fetchGroupDetails,
 }) => {
   const [name, setName] = useState<string>(''); // Election name
-  const [startDate, setStartDate] = useState<Date>(new Date());
-  const [endDate, setEndDate] = useState<Date>(new Date(new Date().getTime() + 60 * 60 * 1000));
+  const [startDate, setStartDate] = useState<Date>(() => { // Initialize with a function for correct time on mount
+    return new Date(new Date().getTime() + 15 * 60 * 1000); // Default to 15 minutes in the future
+  });
+  const [endDate, setEndDate] = useState<Date>(() => { // Initialize with a function for correct time on mount
+    return new Date(new Date().getTime() + 75 * 60 * 1000); // Default to 1 hour and 15 minutes in the future
+  });
   const [paymentOptions, setPaymentOptions] = useState<string>('allpay');
   const [priceOptions, setPriceOptions] = useState<string>('1,2,3');
   const [proposals, setProposals] = useState<string[]>([]); // Proposals list
   const [newProposal, setNewProposal] = useState<string>(''); // Current proposal input
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [localStartDateString, setLocalStartDateString] = useState('');
+  const [localEndDateString, setLocalEndDateString] = useState('');
 
   const handleStartElection = async () => {
     if (!user) return;
@@ -73,13 +79,16 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newStartDate = new Date(e.target.value);
     setStartDate(newStartDate);
+    setLocalStartDateString(formatLocalDateTime(newStartDate)); // Update local string
     if (endDate < newStartDate) {
       setEndDate(new Date(newStartDate.getTime() + 60 * 60 * 1000));
+      setLocalEndDateString(formatLocalDateTime(new Date(newStartDate.getTime() + 60 * 60 * 1000))); // Also update end date string
     }
   };
 
   const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEndDate(new Date(e.target.value));
+    setLocalEndDateString(formatLocalDateTime(new Date(e.target.value))); // Update local string
   };
 
   const handleNewProposalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,7 +114,24 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
     }
   };
 
+  // Function to format Date to YYYY-MM-DDTHH:mm for datetime-local input
+  const formatLocalDateTime = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  useEffect(() => {
+    setLocalStartDateString(formatLocalDateTime(startDate));
+    setLocalEndDateString(formatLocalDateTime(endDate));
+  }, [startDate, endDate]);
+
+
   if (!isOpen) return null;
+
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
@@ -131,13 +157,12 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
         {/* Start Date/Time Input */}
         <div className="mb-4">
           <label htmlFor="startDate" className="block text-gray-700 text-sm font-bold mb-2">
-            Start Date/Time
-          </label>
+            Start Date/Time (Local Time)</label>
           <input
             type="datetime-local"
             id="startDate"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            value={startDate.toISOString().slice(0, 16)}
+            value={localStartDateString}
             onChange={handleStartDateChange}
           />
         </div>
@@ -145,16 +170,17 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
         {/* End Date/Time Input */}
         <div className="mb-4">
           <label htmlFor="endDate" className="block text-gray-700 text-sm font-bold mb-2">
-            End Date/Time
+            End Date/Time (Local Time)
           </label>
           <input
             type="datetime-local"
             id="endDate"
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            value={endDate.toISOString().slice(0, 16)}
+            value={localEndDateString}
             onChange={handleEndDateChange}
           />
         </div>
+
 
         {/* Payment Options Select */}
         <div className="mb-4">

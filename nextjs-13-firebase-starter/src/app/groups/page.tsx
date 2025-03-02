@@ -4,6 +4,8 @@ import { useAuthContext } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import { getAuth, signOut } from 'firebase/auth'; // Import signOut and getAuth
+import firebase_app from '@/firebase/config'; // Import firebase app
 
 interface Group {
   group_id: string;
@@ -16,7 +18,7 @@ interface Group {
 }
 
 const GroupsPage: React.FC = () => {
-  const { user } = useAuthContext() as { user: any };
+  const { user, setUser } = useAuthContext() as { user: any, setUser: any };
   const router = useRouter();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +132,18 @@ const GroupsPage: React.FC = () => {
       }
   }
 
+  const handleLogout = async () => {
+    const auth = getAuth(firebase_app); // Get auth instance
+    try {
+      await signOut(auth); // Sign out the user
+      setUser(null); // Explicitly set user state to null in AuthContext
+      router.push('/'); // Redirect to home page after logout
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setError('Logout failed.'); // Set error state to display message
+    }
+  };
+
 
   if (loading) {
     return <div>Loading groups...</div>;
@@ -141,7 +155,16 @@ const GroupsPage: React.FC = () => {
 
   return (
      <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-4">My Groups</h1>
+        <div className="flex justify-between items-center mb-4">
+            <h1 className="text-2xl font-bold">My Groups</h1>
+            <button
+                onClick={handleLogout}
+                className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+            >
+                Logout
+            </button>
+        </div>
+
         <button onClick={handleCreateGroup} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4">
             Create New Group
         </button>
@@ -151,7 +174,7 @@ const GroupsPage: React.FC = () => {
                     <li key={group.group_id} className="bg-white shadow rounded p-4">
                          <Link href={`/groups/${group.group_id}`} >
                              <h2 className="text-xl font-semibold hover:underline cursor-pointer">{group.name}</h2>
-                         </Link>
+                          </Link>
                         <p className="text-gray-700">{group.description}</p>
                         <p className="text-gray-500">
                              Created At: {new Date(group.created_at).toLocaleString()}

@@ -6,6 +6,13 @@ export interface User {
   email: string | null;
 }
 
+export interface TokenSettings {
+    regeneration_rate: number;
+    regeneration_interval: string;
+    max_tokens: number;
+    initial_tokens: number;
+}
+
 export interface Group {
   group_id: string;
   name: string;
@@ -14,6 +21,7 @@ export interface Group {
   updated_at: string;
   memberships: string[];
   elections: string[];
+  token_settings?: TokenSettings; // Added token_settings property
 }
 
 export interface Membership {
@@ -41,7 +49,7 @@ export interface Election {
   payment_options: string;
   price_options: string;
   winning_proposal_id?: string;
-  proposals: Proposal[]; 
+  proposals: Proposal[];
 }
 
 export interface Proposal {

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -8,6 +8,25 @@ class User(BaseModel):
     email: EmailStr | None = None
     memberships: List["Membership"] = []
     # Add other relevant fields based on your user data
+
+
+# --- Strategy Enums ---
+class PaymentOptionType(str, Enum):
+    ALL_PAY = "allpay"
+    WINNERS_PAY = "winnerspay"
+
+class PriceOptionType(str, Enum):
+    FIRST_PRICE = "firstprice"
+    SECOND_PRICE = "secondprice"
+
+# --- Strategy Configuration Models ---
+class PaymentOptionConfig(BaseModel):
+    type: PaymentOptionType
+    config: Dict[str, Any] = {} # For future strategy-specific configurations
+
+class PriceOptionConfig(BaseModel):
+    type: PriceOptionType
+    config: Dict[str, Any] = {} # For future strategy-specific configurations
 
 # Represents settings for group
 class TokenSettings(BaseModel):
@@ -56,8 +75,8 @@ class Election(BaseModel):
     start_date: datetime
     end_date: datetime
     status: ElectionStatus = Field(default=ElectionStatus.UPCOMING) # default to upcoming
-    payment_options: str  # Example: ["fiat", "crypto"]
-    price_options: str  # Example: [1.0, 2.5, 5.0]
+    payment_options: str  # Example: allpay, winnerspay
+    price_options: str  # Example: firstprice, secondprice
     winning_proposal_id: Optional[str] = None # Relationship: Election has one winning Proposal (replace with reference if needed)
     group: Optional[Group] = None  # Relationship: Election belongs to Group
     proposals: List[str] = []  # Relationship: Election has many Proposals

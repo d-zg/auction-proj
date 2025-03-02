@@ -1,11 +1,14 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
+import time
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from core.security import get_current_user
 from models import User
 from api.routes import users, groups, memberships, elections  # Import your routers
+import logging
 
 app = FastAPI(title=settings.PROJECT_NAME)
+logger = logging.getLogger("uvicorn")  # or configure your own logger
 
 # CORS
 app.add_middleware(
@@ -24,6 +27,15 @@ app.include_router(elections.router, prefix="/groups/{group_id}/elections", tags
 # ... other protected routes
 
 # --- Placeholder Endpoint (Not Protected) ---
+
+@app.middleware("http")
+async def log_request_latency(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+    logger.info(f"{request.method} {request.url} completed in {duration:.2f} seconds")
+    return response
+
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
