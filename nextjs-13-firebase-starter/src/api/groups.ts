@@ -111,3 +111,13 @@ export const updateMemberTokenBalance = async (
   });
   return response.data;
 };
+
+export const removeUserFromGroup = async (groupId: string, email: string, token: string) => {
+    const response = await api.delete(`/memberships/groups/${groupId}/members`, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        data: { email_to_remove: email } // Send email in the request body
+    });
+    return response;
+};

@@ -10,7 +10,7 @@ import StartElectionModal from './components/StartElectionModal';
 import EditTokenBalanceModal from './components/EditTokenBalanceModal'; // Import the new modal
 import EditTokenSettingsModal from './components/EditTokenSettingsModal';
 import ElectionList from './components/ElectionList';
-import { getGroupDetails, getGroupMembers, getGroupElections } from '@/api/groups';
+import { getGroupDetails, getGroupMembers, getGroupElections, removeUserFromGroup } from '@/api/groups';
 import { User, Membership, MemberWithDetails, Group, Election } from '@/models/models'; //
 
 const GroupDetailsPage: React.FC = () => {
@@ -93,6 +93,37 @@ const GroupDetailsPage: React.FC = () => {
     const handleOpenEditTokenSettingsModal = () => setIsEditTokenSettingsModalOpen(true);
     const handleCloseEditTokenSettingsModal = () => setIsEditTokenSettingsModalOpen(false);
 
+    const handleRemoveMember = async (memberToRemove: MemberWithDetails) => {
+        if (!user || !groupId) return;
+        if (!isAdmin) {
+            alert("Only admins can remove members."); // Or handle this with better UI feedback
+            return;
+        }
+        if (!window.confirm(`Are you sure you want to remove ${memberToRemove.user.email} from the group?`)) {
+            return; // User cancelled removal
+        }
+
+        setLoading(true);
+        setError(null);
+        try {
+            const token = await user.getIdToken();
+            if (typeof memberToRemove.user.email === 'string') { // Check if email is a string
+                await removeUserFromGroup(groupId, memberToRemove.user.email, token);
+                alert(`${memberToRemove.user.email} removed from group.`);
+                fetchGroupData(); // Refresh member list
+            } else {
+                setError("Could not remove member: Email address is missing."); // Handle case where email is null
+                console.error("Error removing member: Email address is missing.");
+            }
+
+        } catch (err: any) {
+            setError(err.response?.data?.detail || 'Failed to remove member.');
+            console.error("Error removing member:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
     if (loading) {
         return <div>Loading group details...</div>;
@@ -127,15 +158,26 @@ const GroupDetailsPage: React.FC = () => {
                         <div className="text-sm text-gray-600">
                             Tokens: {member.membership.token_balance}
                         </div>
-                        {isAdmin && (
-                            <button
-                                onClick={() => handleOpenEditTokenModal(member)}
-                                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-sm"
-                                aria-label={`Edit tokens for ${member.user.email}`}
-                            >
-                                Edit Tokens
-                            </button>
-                        )}
+                        <div className="flex gap-2">
+                            {isAdmin && member.membership.user_id !== user.uid && ( // Don't allow admin to remove themselves with this button
+                                <button
+                                    onClick={() => handleRemoveMember(member)}
+                                    className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
+                                    aria-label={`Remove ${member.user.email} from group`}
+                                >
+                                    Remove
+                                </button>
+                            )}
+                            {isAdmin && (
+                                <button
+                                    onClick={() => handleOpenEditTokenModal(member)}
+                                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-sm"
+                                    aria-label={`Edit tokens for ${member.user.email}`}
+                                >
+                                    Edit Tokens
+                                </button>
+                            )}
+                        </div>
                     </li>
                 ))}
             </ul>
