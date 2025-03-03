@@ -80,7 +80,7 @@ const Page: React.FC = () => {
               </button>
             </form>
             <div className="mt-4 text-sm text-gray-600 text-center">
-              Don't have an account? <Link href="/signup" className="text-blue-500 hover:text-blue-700">Sign Up</Link>
+              Do you have an account? Sign up here. <Link href="/signup" className="text-blue-500 hover:text-blue-700">Sign Up</Link>
             </div>
           </div>
         </div>
