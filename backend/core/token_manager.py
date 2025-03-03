@@ -16,7 +16,6 @@ async def regenerate_tokens_for_membership(membership: Membership, group: Group)
         membership: The Membership object to regenerate tokens for.
         group: The Group object to get token settings from.
     """
-    pdb.set_trace()
     token_settings = group.token_settings
     if not token_settings:
         logger.warning(f"No token settings found for group {group.group_id}, skipping regeneration for membership {membership.membership_id}")

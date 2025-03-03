@@ -3,6 +3,7 @@ from models import Election, Proposal, Vote, Membership, Group
 from typing import List, Dict, Optional, Tuple
 from google.cloud import firestore
 from db import db
+import math
 
 class PriceCalculationStrategy(ABC):
     """
@@ -82,13 +83,7 @@ class FirstPriceCalculationStrategy(PriceCalculationStrategy):
     Calculates a price by using the first price option
     """
     async def calculate_price(self, election: Election, proposals: List[Proposal], votes: List[Vote]) -> float:
-        price_options = election.price_options.split(",")
-
-        if len(price_options) == 0:
-            raise Exception("Price options should have a comma seperated list")
-        if not price_options[0]:
-            raise Exception("Price options should not be empty")
-        return float(price_options[0])
+        return 1 # denotes that in the first price, we pay exactly our vote
 
 
 class SecondPriceCalculationStrategy(PriceCalculationStrategy):
@@ -108,10 +103,11 @@ class SecondPriceCalculationStrategy(PriceCalculationStrategy):
 
         if not price_options[1]:
             raise Exception("Price options should not be empty")
+
         if len(sorted_votes) < 2:
-            return float(price_options[0])
+            return 1 # multiplier
         else:
-            return float(sorted_votes[1])
+            return float(sorted_votes[1] / sorted_votes[0]) # multiplier
 
 class AllPayPaymentStrategy(PaymentApplicationStrategy):
     """
@@ -123,7 +119,7 @@ class AllPayPaymentStrategy(PaymentApplicationStrategy):
             membership = memberships.get(vote.membership_id)
             if membership:
                 membership_ref = db.collection("memberships").document(membership.membership_id)
-                new_balance = membership.token_balance - vote.tokens_used
+                new_balance = membership.token_balance - vote.tokens_used # don't multiply because it doesn't make sense
 
                 if new_balance < 0:
                     # should log this somewhere so that admins know that something has gone wrong
@@ -157,7 +153,7 @@ class WinnersPayPaymentStrategy(PaymentApplicationStrategy):
             membership = memberships.get(vote.membership_id)
             if membership and vote.proposal_id == winning_proposal_id:
                 membership_ref = db.collection("memberships").document(membership.membership_id)
-                new_balance = membership.token_balance - vote.tokens_used
+                new_balance = membership.token_balance - math.floor(vote.tokens_used * price_for_tokens) # use price to discount if only winners pay   
 
                 group_id = membership.group_id
                 group_ref = db.collection("groups").document(group_id)
