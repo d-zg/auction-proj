@@ -47,9 +47,10 @@ async def update_election_status_and_resolve(election: Election, db: firestore.C
 
         # --- Resolve and Close Election Logic (Reusing from your close_election route) ---
         # Determine which strategy to use based on the payment and price options
+
         if election.payment_options == "allpay" and election.price_options.startswith("1,"):
             strategy = MostVotesWinsStrategy(price_strategy=FirstPriceCalculationStrategy(), payment_strategy=AllPayPaymentStrategy())
-        elif election.payment_options == "allpay" and election.price_options.startswith("1,"):
+        elif election.payment_options == "allpay" and election.price_options.startswith("2,"):
             strategy = MostVotesWinsStrategy(price_strategy=SecondPriceCalculationStrategy(), payment_strategy=AllPayPaymentStrategy())
         elif election.payment_options == "winnerspay" and election.price_options.startswith("1,"):
             strategy = MostVotesWinsStrategy(price_strategy=FirstPriceCalculationStrategy(), payment_strategy=WinnersPayPaymentStrategy())

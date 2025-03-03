@@ -209,9 +209,8 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
             value={priceOptions}
             onChange={(e) => setPriceOptions(e.target.value)}
           >
-            <option value="1,2,3">1, 2, 3</option>
-            <option value="2,3,4">2, 3, 4</option>
-            <option value="5,6,7">5, 6, 7</option>
+            <option value="1,2,3">First Price</option>
+            <option value="2,3,4">Second Price</option>
           </select>
         </div>
 

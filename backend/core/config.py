@@ -1,14 +1,17 @@
-# File: backend/core/config.py
-from pydantic import BaseModel
-import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
-class Settings(BaseModel):
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+    
     PROJECT_NAME: str = "My FastAPI App"
-    ALLOWED_ORIGINS: list[str] = []
+    # Load the raw string from the environment (or .env) using an alias.
+    allowed_origins: str = Field("", alias="ALLOWED_ORIGINS")
+    
+    @property
+    def ALLOWED_ORIGINS(self) -> list[str]:
+        # Convert the comma-separated string into a list.
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        origins_str = os.getenv("ALLOWED_ORIGINS", "")
-        self.ALLOWED_ORIGINS = [origin.strip() for origin in origins_str.split(",") if origin.strip()]
-
+# Usage
 settings = Settings()
