@@ -1,3 +1,4 @@
+# backend/api/routes/groups.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from models import Group, TokenSettings, Membership, User
 from db import db
@@ -99,7 +100,7 @@ async def create_group(
         membership_id=membership_id,
         user_id=current_user.uid,
         group_id=group_id,
-        token_balance=0,
+        token_balance=group.token_settings.initial_tokens if group.token_settings and group.token_settings.initial_tokens is not None else 0, # Use initial tokens from group settings
         role="admin",
     )
     db.collection("memberships").document(membership_id).set(membership.model_dump())

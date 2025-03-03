@@ -199,20 +199,22 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
         </div>
 
         {/* Price Options Select */}
-        <div className="mb-4">
-          <label htmlFor="priceOptions" className="block text-gray-700 text-sm font-bold mb-2">
-            Price Options
-          </label>
-          <select
-            id="priceOptions"
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            value={priceOptions}
-            onChange={(e) => setPriceOptions(e.target.value)}
-          >
-            <option value="1,2,3">First Price</option>
-            <option value="2,3,4">Second Price</option>
-          </select>
-        </div>
+        {paymentOptions !== 'allpay' && ( // Conditionally render Price Options
+            <div className="mb-4">
+              <label htmlFor="priceOptions" className="block text-gray-700 text-sm font-bold mb-2">
+                Price Options
+              </label>
+              <select
+                id="priceOptions"
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                value={priceOptions}
+                onChange={(e) => setPriceOptions(e.target.value)}
+              >
+                <option value="1,2,3">First Price</option>
+                <option value="2,3,4">Second Price</option>
+              </select>
+            </div>
+          )}
 
         {/* Proposals Input */}
         <div className="mb-4">

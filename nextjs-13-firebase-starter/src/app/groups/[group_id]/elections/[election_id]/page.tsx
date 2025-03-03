@@ -21,6 +21,16 @@ const ElectionDetailsPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false); // Track admin status
 
+    const getPriceOptionText = (priceOptions: string): string => {
+        if (priceOptions && priceOptions.startsWith('1,')) {
+            return 'First Price';
+        } else if (priceOptions && priceOptions.startsWith('2,')) {
+            return 'Second Price';
+        } else {
+            return 'Unknown Price Option';
+        }
+    };
+
     useEffect(() => {
         const fetchElectionDetailsData = async () => {
             if (!groupId || !electionId || !user) return;
@@ -117,6 +127,12 @@ const ElectionDetailsPage: React.FC = () => {
             <p className="text-gray-700 mb-4">
                 {new Date(election.start_date).toLocaleString()} - {new Date(election.end_date).toLocaleString()}
                 <span className="ml-2">Status: {election.status}</span>
+            </p>
+            <p className="text-gray-700 mb-4">
+                Payment Option: {election.payment_options === 'allpay' ? 'All Pay' : election.payment_options === 'winnerspay' ? 'Winners Pay' : 'Unknown'}
+            </p>
+            <p className="text-gray-700 mb-4">
+                Price Option: {getPriceOptionText(election.price_options)}
             </p>
 
             {isAdmin && election.status === 'upcoming' && (
