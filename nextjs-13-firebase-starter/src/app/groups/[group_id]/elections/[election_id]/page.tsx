@@ -163,7 +163,6 @@ const ElectionDetailsPage: React.FC = () => { // Change to React.FC - Next.js wi
                     Close Election Early
                 </button>
             )}
-
             <ElectionProposalList
                 electionDetails={election} // Pass electionDetails as prop
                 groupId={groupId}
