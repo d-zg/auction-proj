@@ -13,10 +13,10 @@ export default function Home() {
         </p>
         {/* Interactive Image/Animation Placeholder - Replace with your actual image/animation */}
         <div className="flex space-x-4 justify-center mb-8"> {/* Centered buttons container */}
-          <Link href="/signin" className="inline-block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full focus:outline-none focus:shadow-outline"> {/* Styled sign-in button */}
+          <Link href="/signin" className="inline-block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full focus:outline-none focus:shadow-outline" aria-label="Sign in to Decentralized Decisions"> {/* Styled sign-in button */}
             Sign In
           </Link>
-          <Link href="/signup" className="inline-block bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-full focus:outline-none focus:shadow-outline"> {/* Styled sign-up button */}
+          <Link href="/signup" className="inline-block bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-full focus:outline-none focus:shadow-outline" aria-label="Register for Decentralized Decisions"> {/* Styled sign-up button */}
             Register
           </Link>
         </div>

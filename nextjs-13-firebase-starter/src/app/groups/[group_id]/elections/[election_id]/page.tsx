@@ -7,16 +7,19 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getElectionDetails, closeElectionEarly, startElectionNow } from '@/api/elections';
 import { getGroupMembers } from '@/api/groups'; // Import getGroupMembers
-import { Election } from '@/models/models';
+import { Election, MemberWithDetails } from '@/models/models';
 import ElectionProposalList from './components/ElectionProposalList';
 
-const ElectionDetailsPage: React.FC = () => {
+// REMOVE the ElectionDetailsPageProps interface entirely
+
+const ElectionDetailsPage: React.FC = () => { // Change to React.FC - Next.js will infer props
     const { user } = useAuthContext() as { user: any };
     const router = useRouter();
     const params = useParams();
     const groupId = params.group_id as string;
     const electionId = params.election_id as string;
     const [election, setElection] = useState<Election | null>(null);
+    const [members, setMembers] = useState<MemberWithDetails[]>([]); // State to hold members
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState(false); // Track admin status
@@ -31,8 +34,18 @@ const ElectionDetailsPage: React.FC = () => {
         }
     };
 
+    const getResolutionStrategyText = (resolutionStrategy: string): string => {
+        if (resolutionStrategy === 'most_votes') {
+            return 'Most Votes Wins';
+        } else if (resolutionStrategy === 'lottery') {
+            return 'Lottery';
+        } else {
+            return 'Unknown Resolution Strategy';
+        }
+    };
+
     useEffect(() => {
-        const fetchElectionDetailsData = async () => {
+        const fetchPageData = async () => { // Combined data fetching function
             if (!groupId || !electionId || !user) return;
             setLoading(true);
             setError(null);
@@ -41,12 +54,11 @@ const ElectionDetailsPage: React.FC = () => {
                 const electionDetails = await getElectionDetails(groupId, electionId, token);
                 setElection(electionDetails);
 
-                // --- CORRECT ADMIN CHECK ---
-                const membersData = await getGroupMembers(groupId, token); // Fetch group members
-                const currentUserMembership = membersData.find(member => member.membership.user_id === user.uid); // Find current user's membership
-                setIsAdmin(currentUserMembership?.membership.role === 'admin' || false); // Check role from membership
-                // --- END CORRECT ADMIN CHECK ---
+                const membersData = await getGroupMembers(groupId, token);
+                setMembers(membersData); // Store members in state
 
+                const currentUserMembership = membersData.find(member => member.membership.user_id === user.uid);
+                setIsAdmin(currentUserMembership?.membership.role === 'admin' || false);
 
             } catch (err: any) {
                 setError(err.message || 'Failed to load election details.');
@@ -56,7 +68,7 @@ const ElectionDetailsPage: React.FC = () => {
             }
         };
 
-        fetchElectionDetailsData();
+        fetchPageData(); // Call the combined data fetch
     }, [groupId, electionId, user]);
 
     const handleCloseElectionEarly = async () => {
@@ -110,16 +122,10 @@ const ElectionDetailsPage: React.FC = () => {
         return <div>Error: {error || 'Failed to load election.'}</div>;
     }
 
-    // --- DEBUG LOGS - Keep these for now to verify ---
-    console.log("isAdmin value:", isAdmin);
-    console.log("election.status value:", election.status);
-    console.log("Condition isAdmin && election.status === 'open':", isAdmin && election.status === 'open');
-    // --- END DEBUG LOGS ---
-
 
     return (
         <div className="container mx-auto p-4">
-            <Link href={`/groups/${groupId}`} className="inline-block mb-4 text-blue-500 hover:underline">
+            <Link href={`/groups/${groupId}`} className="inline-block mb-4 text-blue-500 hover:underline" aria-label="Back to group details">
                 ← Back to Group
             </Link>
 
@@ -134,6 +140,10 @@ const ElectionDetailsPage: React.FC = () => {
             <p className="text-gray-700 mb-4">
                 Price Option: {getPriceOptionText(election.price_options)}
             </p>
+            <p className="text-gray-700 mb-4">
+                Resolution Strategy: {getResolutionStrategyText(election.resolution_strategy)}
+            </p>
+
 
             {isAdmin && election.status === 'upcoming' && (
                 <button
@@ -154,7 +164,13 @@ const ElectionDetailsPage: React.FC = () => {
                 </button>
             )}
 
-            <ElectionProposalList electionId={electionId} groupId={groupId} />
+            <ElectionProposalList
+                electionDetails={election} // Pass electionDetails as prop
+                groupId={groupId}
+                isAdmin={isAdmin} // Pass isAdmin as prop
+                members={members} // Pass members as prop
+                electionId={electionId} // Pass electionId as prop!
+            />
 
         </div>
     );

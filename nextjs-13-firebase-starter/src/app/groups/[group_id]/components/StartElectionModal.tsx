@@ -1,4 +1,4 @@
-// src/components/StartElectionModal.tsx
+// src/app/groups/[group_id]/components/StartElectionModal.tsx
 import { useState, KeyboardEvent, useEffect } from 'react';
 import { startElection } from '@/api/groups';
 
@@ -31,6 +31,7 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [localStartDateString, setLocalStartDateString] = useState('');
+  const [resolutionStrategy, setResolutionStrategy] = useState<string>('most_votes'); // Default to 'most_votes'
   const [localEndDateString, setLocalEndDateString] = useState('');
 
   const handleStartElection = async () => {
@@ -53,6 +54,7 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
         endDate.toISOString(),
         paymentOptions,
         priceOptions,
+        resolutionStrategy, // Include resolution strategy
         proposals, // User-submitted proposals
         token
       );
@@ -182,6 +184,22 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
         </div>
 
 
+         {/* Resolution Strategy Select */}
+         <div className="mb-4">
+          <label htmlFor="resolutionStrategy" className="block text-gray-700 text-sm font-bold mb-2">
+            Resolution Strategy
+          </label>
+          <select
+            id="resolutionStrategy"
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            value={resolutionStrategy}
+            onChange={(e) => setResolutionStrategy(e.target.value)}
+          >
+            <option value="most_votes">Most Votes Wins</option>
+            <option value="lottery">Lottery</option>
+          </select>
+        </div>
+
         {/* Payment Options Select */}
         <div className="mb-4">
           <label htmlFor="paymentOptions" className="block text-gray-700 text-sm font-bold mb-2">
@@ -199,7 +217,7 @@ const StartElectionModal: React.FC<StartElectionModalProps> = ({
         </div>
 
         {/* Price Options Select */}
-        {paymentOptions !== 'allpay' && ( // Conditionally render Price Options
+        {(paymentOptions !== 'allpay' && resolutionStrategy !== 'lottery') && (
             <div className="mb-4">
               <label htmlFor="priceOptions" className="block text-gray-700 text-sm font-bold mb-2">
                 Price Options

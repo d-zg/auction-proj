@@ -52,6 +52,7 @@ export const startElection = async (
     endDate: string,
     paymentOptions: string,
     priceOptions: string,
+    resolutionStrategy: string,
     proposals: string[], // Array of proposal titles
     token: string
   ) => {
@@ -65,6 +66,7 @@ export const startElection = async (
         end_date: endDate,
         payment_options: paymentOptions,
         price_options: priceOptions,
+        resolution_strategy: resolutionStrategy,
         proposals: formattedProposals, // Send formatted proposals
       },
       {

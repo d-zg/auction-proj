@@ -18,7 +18,7 @@ const GroupDetailsPage: React.FC = () => {
     const router = useRouter();
     const [group, setGroup] = useState<Group | null>(null);
     const [members, setMembers] = useState<MemberWithDetails[]>([]);
-    const [elections, setElections] = useState<Election[]>([]);
+     const [elections, setElections] = useState<Election[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -43,11 +43,11 @@ const GroupDetailsPage: React.FC = () => {
 
             const groupData = await getGroupDetails(groupId, token);
             const membersData = await getGroupMembers(groupId, token);
-            const electionsData = await getGroupElections(groupId, token);
+             const electionsData = await getGroupElections(groupId, token);
 
             setGroup(groupData);
             setMembers(membersData);
-            setElections(electionsData);
+             setElections(electionsData);
             setError(null);
 
             const currentUserMembership = membersData.find(
@@ -139,7 +139,7 @@ const GroupDetailsPage: React.FC = () => {
 
     return (
         <div className="container mx-auto p-4">
-            <Link href={`/groups`} className="inline-block mb-4 text-blue-500 hover:underline">
+            <Link href={`/groups`} className="inline-block mb-4 text-blue-500 hover:underline" aria-label="Back to groups list">
                 ← Back to Groups
             </Link>
 
@@ -187,6 +187,7 @@ const GroupDetailsPage: React.FC = () => {
                 <button
                     onClick={handleOpenInviteModal}
                     className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4"
+                    aria-label="Invite user to group"
                 >
                     Invite User
                 </button>
@@ -197,6 +198,7 @@ const GroupDetailsPage: React.FC = () => {
                 <button
                     onClick={handleOpenStartElectionModal}
                     className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mb-4 ml-4"
+                    aria-label="Start a new election"
                 >
                     Start Election
                 </button>
@@ -207,6 +209,7 @@ const GroupDetailsPage: React.FC = () => {
                 <button
                     onClick={handleOpenEditTokenSettingsModal}
                     className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded mb-4 ml-4"
+                    aria-label="Edit token settings for the group"
                 >
                     Edit Token Settings
                 </button>

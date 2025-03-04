@@ -48,6 +48,7 @@ export interface Election {
   status: string;
   payment_options: string;
   price_options: string;
+  resolution_strategy: string;
   winning_proposal_id?: string;
   proposals: Proposal[];
 }
@@ -82,6 +83,7 @@ export interface ElectionCreate {
   end_date: string;
   payment_options: string;
   price_options: string;
+  resolution_strategy: string;
   proposals: ProposalCreate[];
 }
 
