@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from models import Group, Membership, User, Election, Proposal, Vote, ElectionStatus
+from models import Group, Membership, User, Election, Proposal, Vote, ElectionStatus, ResolutionStrategyType
 from db import db
 from core.security import get_current_user
 from typing import List, Dict, Any, Optional
@@ -14,6 +14,7 @@ from strategies.auction_resolution import (
     SecondPriceCalculationStrategy,
     AllPayPaymentStrategy,
     WinnersPayPaymentStrategy,
+    LotteryWinsStrategy, # Import LotteryWinsStrategy
 )
 from core.election_state_manager import update_election_status_and_resolve
 import logging
@@ -44,6 +45,7 @@ class ElectionCreate(BaseModel):
     end_date: datetime
     payment_options: str
     price_options: str
+    resolution_strategy: str # Add resolution strategy
     proposals: List[ProposalCreate]
 
 
@@ -60,6 +62,7 @@ class ElectionDetailsResponse(BaseModel):
     status: ElectionStatus
     payment_options: str
     price_options: str
+    resolution_strategy: ResolutionStrategyType # Add resolution_strategy here
     winning_proposal_id: Optional[str] = None
     proposals: List[dict]
 
@@ -131,6 +134,7 @@ async def create_election(
         end_date=election_data.end_date,
         payment_options=election_data.payment_options,
         price_options=election_data.price_options,
+        resolution_strategy=election_data.resolution_strategy, # Set resolution strategy
         status="upcoming",  # Set the initial status to 'upcoming'
         proposals=[],
     )
@@ -853,36 +857,35 @@ async def close_election(
             # Find the proposal with the most votes
             winning_proposal_id = max(votes_by_proposal, key=votes_by_proposal.get)
 
-    # Determine which strategy to use based on the payment and price options
-    if election.payment_options == "allpay" and election.price_options.startswith("1,"):
-        strategy = MostVotesWinsStrategy(
-            price_strategy=FirstPriceCalculationStrategy(),
-            payment_strategy=AllPayPaymentStrategy(),
+    # Determine which strategy to use based on the payment, price, and resolution options
+    if election.resolution_strategy == "most_votes": 
+        if election.payment_options == "allpay" and election.price_options.startswith("1,"):
+            strategy = MostVotesWinsStrategy(
+                price_strategy=FirstPriceCalculationStrategy(),
+                payment_strategy=AllPayPaymentStrategy(),
+            )
+        elif election.payment_options == "allpay" and election.price_options.startswith("2,"):
+            strategy = MostVotesWinsStrategy(
+                price_strategy=SecondPriceCalculationStrategy(),
+                payment_strategy=AllPayPaymentStrategy(),
+            )
+        elif election.payment_options == "winnerspay" and election.price_options.startswith("1,"):
+            strategy = MostVotesWinsStrategy(
+                price_strategy=FirstPriceCalculationStrategy(),
+                payment_strategy=WinnersPayPaymentStrategy(),
+            )
+        elif election.payment_options == "winnerspay" and election.price_options.startswith("2,"):
+            strategy = MostVotesWinsStrategy(
+                price_strategy=SecondPriceCalculationStrategy(),
+                payment_strategy=WinnersPayPaymentStrategy(),
         )
-    elif election.payment_options == "allpay" and election.price_options.startswith(
-        "1,"
-    ):
-        strategy = MostVotesWinsStrategy(
-            price_strategy=SecondPriceCalculationStrategy(),
-            payment_strategy=AllPayPaymentStrategy(),
-        )
-    elif election.payment_options == "winnerspay" and election.price_options.startswith(
-        "1,"
-    ):
-        strategy = MostVotesWinsStrategy(
-            price_strategy=FirstPriceCalculationStrategy(),
-            payment_strategy=WinnersPayPaymentStrategy(),
-        )
-    elif election.payment_options == "winnerspay" and election.price_options.startswith(
-        "2,"
-    ):
-        strategy = MostVotesWinsStrategy(
-            price_strategy=SecondPriceCalculationStrategy(),
-            payment_strategy=WinnersPayPaymentStrategy(),
-        )
+        else: 
+            raise Exception("invalid payment or price options")
+
+    elif election.resolution_strategy == "lottery": # Lottery strategy
+       strategy = LotteryWinsStrategy(payment_strategy=AllPayPaymentStrategy())
     else:
         raise Exception("invalid payment or price options")
-
     # Get all memberships of the group so that the strategy can modify the token balance
     membership_docs = (
         db.collection("memberships").where("group_id", "==", group_id).stream()
@@ -965,109 +968,142 @@ async def close_election_early(
     election_id: str,
     current_user: User = Depends(get_current_user),
 ):
+    """
+     Allows an admin to close an election early, regardless of the end_date.
      """
-      Allows an admin to close an election early, regardless of the end_date.
-      """
-     logger.info(f"CLOSE_EARLY: Endpoint hit for election_id: {election_id}, group_id: {group_id}, user_uid: {current_user.uid}")
+    logger.info(
+        f"CLOSE_EARLY: Endpoint hit for election_id: {election_id}, group_id: {group_id}, user_uid: {current_user.uid}"
+    )
 
-     # Check if the current user is an admin of the group
-     logger.info(f"CLOSE_EARLY: Checking membership for user {current_user.uid} in group {group_id}")
-     current_user_membership_ref = db.collection("memberships").document(f"{current_user.uid}_{group_id}")
-     current_user_membership_doc = current_user_membership_ref.get()
+    # Check if the current user is an admin of the group
+    logger.info(
+        f"CLOSE_EARLY: Checking membership for user {current_user.uid} in group {group_id}"
+    )
+    current_user_membership_ref = db.collection("memberships").document(
+        f"{current_user.uid}_{group_id}"
+    )
+    current_user_membership_doc = current_user_membership_ref.get()
 
-     if not current_user_membership_doc.exists:
-         logger.warning(f"CLOSE_EARLY: User {current_user.uid} is NOT a member of group {group_id}")
-         raise HTTPException(
-             status_code=status.HTTP_404_NOT_FOUND,
-             detail="Current user is not a member of this group",
-         )
-     logger.info(f"CLOSE_EARLY: User {current_user.uid} IS a member of group {group_id}")
+    if not current_user_membership_doc.exists:
+        logger.warning(
+            f"CLOSE_EARLY: User {current_user.uid} is NOT a member of group {group_id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group",
+        )
+    logger.info(
+        f"CLOSE_EARLY: User {current_user.uid} IS a member of group {group_id}"
+    )
 
+    current_user_membership = Membership.model_validate(
+        current_user_membership_doc.to_dict()
+    )
 
-     current_user_membership = Membership.model_validate(current_user_membership_doc.to_dict())
+    if current_user_membership.role != "admin":
+        logger.warning(
+            f"CLOSE_EARLY: User {current_user.uid} is NOT an admin of group {group_id}, role: {current_user_membership.role}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can close elections early",
+        )
+    logger.info(
+        f"CLOSE_EARLY: User {current_user.uid} IS an admin of group {group_id}"
+    )
 
-     if current_user_membership.role != "admin":
-         logger.warning(f"CLOSE_EARLY: User {current_user.uid} is NOT an admin of group {group_id}, role: {current_user_membership.role}")
-         raise HTTPException(
-             status_code=status.HTTP_403_FORBIDDEN,
-             detail="Only admins can close elections early",
-         )
-     logger.info(f"CLOSE_EARLY: User {current_user.uid} IS an admin of group {group_id}")
+    # Retrieve the existing election document
+    logger.info(
+        f"CLOSE_EARLY: Retrieving election document for election_id: {election_id}"
+    )
+    election_ref = db.collection("elections").document(election_id)
+    election_doc = election_ref.get()
 
+    if not election_doc.exists:
+        logger.warning(f"CLOSE_EARLY: Election {election_id} NOT found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Election not found",
+        )
+    election = Election.model_validate(election_doc.to_dict())
+    logger.info(
+        f"CLOSE_EARLY: Election {election_id} FOUND, status: {election.status.value}"
+    )
 
-     # Retrieve the existing election document
-     logger.info(f"CLOSE_EARLY: Retrieving election document for election_id: {election_id}")
-     election_ref = db.collection("elections").document(election_id)
-     election_doc = election_ref.get()
+    # Ensure that the election is open or upcoming (prevent closing already closed elections)
+    if election.status not in [ElectionStatus.OPEN, ElectionStatus.UPCOMING]:
+        logger.warning(
+            f"CLOSE_EARLY: Election {election_id} is NOT open or upcoming, status is {election.status.value}, cannot close early"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This election is already {election.status.value} and cannot be closed early.",
+        )
+    logger.info(
+        f"CLOSE_EARLY: Election {election_id} IS open or upcoming, proceeding to close."
+    )
 
-     if not election_doc.exists:
-         logger.warning(f"CLOSE_EARLY: Election {election_id} NOT found")
-         raise HTTPException(
-             status_code=status.HTTP_404_NOT_FOUND,
-             detail="Election not found",
-         )
-     election = Election.model_validate(election_doc.to_dict())
-     logger.info(f"CLOSE_EARLY: Election {election_id} FOUND, status: {election.status.value}")
+    # --- WORKAROUND: Modify end_date to current time ---
+    now_utc = datetime.now(timezone.utc)
+    updated_election_data = {"end_date": now_utc}  # Prepare update data with new end_date
+    election_ref.update(updated_election_data)  # Update end_date in Firestore
+    election.end_date = now_utc  # Update in-memory election object as well
+    logger.info(
+        f"CLOSE_EARLY: Temporarily updated election {election_id} end_date to current time for early closure."
+    )  # Log the date update
+    # --- END WORKAROUND ---
 
-
-     # Ensure that the election is open or upcoming (prevent closing already closed elections)
-     if election.status not in [ElectionStatus.OPEN, ElectionStatus.UPCOMING]:
-         logger.warning(f"CLOSE_EARLY: Election {election_id} is NOT open or upcoming, status is {election.status.value}, cannot close early")
-         raise HTTPException(
-             status_code=status.HTTP_400_BAD_REQUEST,
-             detail=f"This election is already {election.status.value} and cannot be closed early.",
-         )
-     logger.info(f"CLOSE_EARLY: Election {election_id} IS open or upcoming, proceeding to close.")
-
-     # --- WORKAROUND: Modify end_date to current time ---
-     now_utc = datetime.now(timezone.utc)
-     updated_election_data = {"end_date": now_utc} # Prepare update data with new end_date
-     election_ref.update(updated_election_data) # Update end_date in Firestore
-     election.end_date = now_utc # Update in-memory election object as well
-     logger.info(f"CLOSE_EARLY: Temporarily updated election {election_id} end_date to current time for early closure.") # Log the date update
-     # --- END WORKAROUND ---
-
-
-     # Get all proposals and votes for resolution
-     logger.info(f"CLOSE_EARLY: Fetching proposals for election {election_id}")
-     proposal_docs = (
+    # Get all proposals and votes for resolution
+    logger.info(f"CLOSE_EARLY: Fetching proposals for election {election_id}")
+    proposal_docs = (
         db.collection("proposals")
         .where("election_id", "==", election_id)
         .stream()
-     )
-     proposals = [Proposal.model_validate(proposal_doc.to_dict()) for proposal_doc in proposal_docs]
-     logger.info(f"CLOSE_EARLY: Fetched {len(proposals)} proposals.")
+    )
+    proposals = [
+        Proposal.model_validate(proposal_doc.to_dict())
+        for proposal_doc in proposal_docs
+    ]
+    logger.info(f"CLOSE_EARLY: Fetched {len(proposals)} proposals.")
 
-
-     logger.info(f"CLOSE_EARLY: Fetching votes for election {election_id}")
-     vote_docs = (
+    logger.info(f"CLOSE_EARLY: Fetching votes for election {election_id}")
+    vote_docs = (
         db.collection("votes")
         .where("election_id", "==", election_id)
         .stream()
-      )
-     votes = [Vote.model_validate(vote_doc.to_dict()) for vote_doc in vote_docs]
-     logger.info(f"CLOSE_EARLY: Fetched {len(votes)} votes.")
+    )
+    votes = [Vote.model_validate(vote_doc.to_dict()) for vote_doc in vote_docs]
+    logger.info(f"CLOSE_EARLY: Fetched {len(votes)} votes.")
 
-
-      # Get all memberships for token balance updates
-     logger.info(f"CLOSE_EARLY: Fetching memberships for group {group_id}")
-     membership_docs = (
+    # Get all memberships for token balance updates
+    logger.info(f"CLOSE_EARLY: Fetching memberships for group {group_id}")
+    membership_docs = (
         db.collection("memberships")
         .where("group_id", "==", group_id)
         .stream()
-     )
-     memberships = {doc.to_dict().get("membership_id"):Membership.model_validate(doc.to_dict()) for doc in membership_docs}
-     logger.info(f"CLOSE_EARLY: Fetched {len(memberships)} memberships.")
+    )
+    memberships = {
+        doc.to_dict().get("membership_id"): Membership.model_validate(doc.to_dict())
+        for doc in membership_docs
+    }
+    logger.info(f"CLOSE_EARLY: Fetched {len(memberships)} memberships.")
 
+    # Resolve and close the election using the helper function
+    logger.info(
+        f"CLOSE_EARLY: Calling update_election_status_and_resolve for election {election_id} after end_date modification."
+    )
+    updated_election = await update_election_status_and_resolve(
+        election, db, memberships, proposals, votes
+    )
+    logger.info(
+        f"CLOSE_EARLY: update_election_status_and_resolve returned, updated status: {updated_election.status}, winning_proposal_id: {updated_election.winning_proposal_id}"
+    )
 
-     # Resolve and close the election using the helper function
-     logger.info(f"CLOSE_EARLY: Calling update_election_status_and_resolve for election {election_id} after end_date modification.")
-     updated_election = await update_election_status_and_resolve(election, db, memberships, proposals, votes)
-     logger.info(f"CLOSE_EARLY: update_election_status_and_resolve returned, updated status: {updated_election.status}, winning_proposal_id: {updated_election.winning_proposal_id}")
+    logger.info(
+        f"CLOSE_EARLY: Returning updated_election to client, status: {updated_election.status.value}, winning_proposal_id: {updated_election.winning_proposal_id}"
+    )
+    return updated_election
 
-
-     logger.info(f"CLOSE_EARLY: Returning updated_election to client, status: {updated_election.status.value}, winning_proposal_id: {updated_election.winning_proposal_id}")
-     return updated_election
 
 @router.put("/{election_id}/start-now", response_model=Election)
 async def start_election_now(

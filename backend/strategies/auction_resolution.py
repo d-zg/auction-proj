@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, Tuple
 from google.cloud import firestore
 from db import db
 import math
+import random
 
 class PriceCalculationStrategy(ABC):
     """
@@ -77,6 +78,38 @@ class MostVotesWinsStrategy(AuctionResolutionStrategy):
         price = await self.price_strategy.calculate_price(election, proposals, votes)
         await self.payment_strategy.apply_payment(election,proposals, votes, memberships, price, winning_proposal_id)
         return winning_proposal_id
+
+class LotteryWinsStrategy(AuctionResolutionStrategy):
+    """
+    Strategy where each token is a lottery ticket. Proposal win chance is proportional to tokens spent on it.
+    """
+    def __init__(self, payment_strategy: PaymentApplicationStrategy):
+        super().__init__(price_strategy=FirstPriceCalculationStrategy(), payment_strategy=payment_strategy) # Price strategy not really used in lottery
+
+    async def resolve_auction(self, election: Election, proposals: List[Proposal], votes: List[Vote], memberships: Dict[str, Membership]) -> Optional[str]:
+        """
+        Resolves the election by lottery, weighting chances by tokens used for each proposal.
+        """
+        lottery_tickets = []
+        total_tokens_casted = 0
+
+        for proposal in proposals:
+            proposal_votes = [vote for vote in votes if vote.proposal_id == proposal.proposal_id]
+            proposal_tokens = sum(vote.tokens_used for vote in proposal_votes)
+            total_tokens_casted += proposal_tokens
+            # Add lottery tickets for each token spent on this proposal
+            lottery_tickets.extend([proposal.proposal_id] * proposal_tokens)
+
+        if not lottery_tickets:
+            return None  # No votes cast in the election, no winner
+
+        # Randomly select a winning proposal ID from the lottery tickets
+        winning_proposal_id = random.choice(lottery_tickets)
+
+        price = 1 # must be 1, second price doesn't make any sense
+        await self.payment_strategy.apply_payment(election, proposals, votes, memberships, price, winning_proposal_id) # Apply payments
+        return winning_proposal_id
+
 
 class FirstPriceCalculationStrategy(PriceCalculationStrategy):
     """
@@ -153,7 +186,7 @@ class WinnersPayPaymentStrategy(PaymentApplicationStrategy):
             membership = memberships.get(vote.membership_id)
             if membership and vote.proposal_id == winning_proposal_id:
                 membership_ref = db.collection("memberships").document(membership.membership_id)
-                new_balance = membership.token_balance - math.floor(vote.tokens_used * price_for_tokens) # use price to discount if only winners pay   
+                new_balance = membership.token_balance - math.floor(vote.tokens_used * price_for_tokens) # use price to discount if only winners pay
 
                 group_id = membership.group_id
                 group_ref = db.collection("groups").document(group_id)

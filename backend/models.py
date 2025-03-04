@@ -19,6 +19,11 @@ class PriceOptionType(str, Enum):
     FIRST_PRICE = "firstprice"
     SECOND_PRICE = "secondprice"
 
+class ResolutionStrategyType(str, Enum):
+    MOST_VOTES = "most_votes"
+    LOTTERY = "lottery"
+
+
 # --- Strategy Configuration Models ---
 class PaymentOptionConfig(BaseModel):
     type: PaymentOptionType
@@ -59,7 +64,7 @@ class Membership(BaseModel):
     group: Optional[Group] = None  # Relationship: Membership belongs to Group
     votes: List["Vote"] = []  # Relationship: Membership has many Votes
     last_token_regeneration: datetime = Field(default_factory=datetime.now)
-        
+
 # --- Election Model ---
 class ElectionStatus(str, Enum):
     OPEN = "open"
@@ -77,6 +82,7 @@ class Election(BaseModel):
     status: ElectionStatus = Field(default=ElectionStatus.UPCOMING) # default to upcoming
     payment_options: str  # Example: allpay, winnerspay
     price_options: str  # Example: firstprice, secondprice
+    resolution_strategy: ResolutionStrategyType = Field(default=ResolutionStrategyType.MOST_VOTES) # Default to most votes
     winning_proposal_id: Optional[str] = None # Relationship: Election has one winning Proposal (replace with reference if needed)
     group: Optional[Group] = None  # Relationship: Election belongs to Group
     proposals: List[str] = []  # Relationship: Election has many Proposals
