@@ -41,9 +41,12 @@ const GroupDetailsPage: React.FC = () => {
             setLoading(true);
             const token = await user.getIdToken();
 
-            const groupData = await getGroupDetails(groupId, token);
-            const membersData = await getGroupMembers(groupId, token);
-             const electionsData = await getGroupElections(groupId, token);
+            // Initiate all API calls concurrently using Promise.all
+            const [groupData, membersData, electionsData] = await Promise.all([
+                getGroupDetails(groupId, token),
+                getGroupMembers(groupId, token),
+                getGroupElections(groupId, token),
+            ]);
 
             setGroup(groupData);
             setMembers(membersData);

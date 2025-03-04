@@ -169,243 +169,6 @@ async def create_election(
     return Election.model_validate(election_doc.to_dict())
 
 
-@router.get("/{election_id}", response_model=ElectionDetailsResponse)
-async def get_election_details(
-    group_id: str, election_id: str, current_user: User = Depends(get_current_user)
-):
-    """
-    Retrieves election details including all proposals, with their votes (if the election is closed)
-    """
-
-    # Check if the current user is a member of the group
-    current_user_membership_ref = db.collection("memberships").document(
-        f"{current_user.uid}_{group_id}"
-    )
-    current_user_membership_doc = current_user_membership_ref.get()
-
-    if not current_user_membership_doc.exists:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Current user is not a member of this group",
-        )
-
-    # Get the election
-    election_ref = db.collection("elections").document(election_id)
-    election_doc = election_ref.get()
-
-    if not election_doc.exists:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
-        )
-
-    election = Election.model_validate(election_doc.to_dict())
-
-    # --- State Transition Check and Update ---
-    # Get all memberships of the group
-    membership_docs = (
-        db.collection("memberships").where("group_id", "==", group_id).stream()
-    )
-    memberships = {
-        doc.to_dict().get("membership_id"): Membership.model_validate(doc.to_dict())
-        for doc in membership_docs
-    }
-
-    vote_docs = db.collection("votes").where("election_id", "==", election_id).stream()
-    votes = [Vote.model_validate(vote_doc.to_dict()) for vote_doc in vote_docs]
-
-    proposal_docs = (
-        db.collection("proposals").where("election_id", "==", election_id).stream()
-    )
-    proposals = [
-        Proposal.model_validate(proposal_doc.to_dict())
-        for proposal_doc in proposal_docs
-    ]
-
-    updated_election = await update_election_status_and_resolve(
-        election, db, memberships, proposals, votes
-    )  # Pass memberships, proposals, votes
-
-    # Get all proposals associated with the election (after status update)
-    proposal_docs = (  # Re-fetch proposals to ensure they are in sync with potentially updated election
-        db.collection("proposals").where("election_id", "==", election_id).stream()
-    )
-    proposals = []  # Re-initialize proposals list
-    for proposal_doc in proposal_docs:
-        proposal = Proposal.model_validate(proposal_doc.to_dict())
-        # if the election is closed, get all of the votes for that proposal
-        if (
-            updated_election.status == ElectionStatus.CLOSED
-        ):  # Use updated_election status
-            vote_docs = (
-                db.collection("votes")
-                .where("proposal_id", "==", proposal.proposal_id)
-                .stream()
-            )
-            votes_for_proposal = [
-                Vote.model_validate(vote_doc.to_dict()).model_dump()
-                for vote_doc in vote_docs
-            ]
-            proposals.append({**proposal.model_dump(), "votes": votes_for_proposal})
-        else:
-            proposals.append({**proposal.model_dump(), "votes": []})
-
-    election_data = updated_election.model_dump()  # Use updated_election data
-    election_data.pop("proposals", None)
-    # Construct a response with all proposals (and vote information if election is closed)
-    return ElectionDetailsResponse(**election_data, proposals=proposals)
-
-
-# @router.get("/", response_model=List[Election])
-# async def get_elections_by_group(
-#     group_id: str, current_user: User = Depends(get_current_user)
-# ):
-#     """
-#     Retrieves all elections for a group, sorted by end date (latest first)
-#     """
-
-#     # Check if the current user is a member of the group
-#     current_user_membership_ref = db.collection("memberships").document(
-#         f"{current_user.uid}_{group_id}"
-#     )
-#     current_user_membership_doc = current_user_membership_ref.get()
-
-#     if not current_user_membership_doc.exists:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="Current user is not a member of this group",
-#         )
-
-#     # Query elections for the group
-#     election_docs = (
-#         db.collection("elections").where("group_id", "==", group_id).stream()
-#     )
-
-#     elections_list = []
-#     for election_doc in election_docs:
-#         election_dict = election_doc.to_dict()
-#         if election_dict:  # Ensure the dictionary is not None
-#             election = Election.model_validate(election_dict)
-
-#             # --- State Transition Check and Update for each election ---
-#             # Get all memberships of the group - can optimize if needed for many groups
-#             membership_docs = (
-#                 db.collection("memberships").where("group_id", "==", group_id).stream()
-#             )
-#             memberships = {
-#                 doc.to_dict().get("membership_id"): Membership.model_validate(
-#                     doc.to_dict()
-#                 )
-#                 for doc in membership_docs
-#             }
-
-#             vote_docs = (
-#                 db.collection("votes")
-#                 .where("election_id", "==", election.election_id)
-#                 .stream()
-#             )
-#             votes = [Vote.model_validate(doc.to_dict()) for doc in vote_docs]
-
-#             proposal_docs = (
-#                 db.collection("proposals")
-#                 .where("election_id", "==", election.election_id)
-#                 .stream()
-#             )
-#             proposals = [
-#                 Proposal.model_validate(proposal_doc.to_dict())
-#                 for proposal_doc in proposal_docs
-#             ]
-
-#             updated_election = await update_election_status_and_resolve(
-#                 election, db, memberships, proposals, votes
-#             )  # Pass memberships, proposals, votes
-#             elections_list.append(updated_election)  # Append the updated election
-
-#     return elections_list
-
-# @router.get("/", response_model=List[Election])
-# async def get_elections_by_group(
-#     group_id: str, current_user: User = Depends(get_current_user)
-# ):
-#     """
-#     Retrieves all elections for a group, sorted by end date (latest first)
-#     """
-#     # Check if the current user is a member of the group
-#     current_user_membership_ref = db.collection("memberships").document(
-#         f"{current_user.uid}_{group_id}"
-#     )
-#     current_user_membership_doc = await asyncio.to_thread(
-#         current_user_membership_ref.get
-#     )
-#     if not current_user_membership_doc.exists:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="Current user is not a member of this group",
-#         )
-
-#     # Fetch elections for the group asynchronously
-#     election_docs = await asyncio.to_thread(
-#         lambda: list(
-#             db.collection("elections")
-#             .where("group_id", "==", group_id)
-#             .stream()
-#         )
-#     )
-
-#     elections_list = []
-
-#     # Query all memberships for the group once (common for all elections)
-#     membership_docs = await asyncio.to_thread(
-#         lambda: list(
-#             db.collection("memberships")
-#             .where("group_id", "==", group_id)
-#             .stream()
-#         )
-#     )
-#     memberships = {
-#         doc.to_dict().get("membership_id"): Membership.model_validate(doc.to_dict())
-#         for doc in membership_docs
-#     }
-
-#     # Process each election
-#     for election_doc in election_docs:
-#         election_dict = election_doc.to_dict()
-#         if election_dict:  # Ensure the dictionary is not None
-#             election = Election.model_validate(election_dict)
-
-#             # Run the votes and proposals queries concurrently
-#             vote_docs_future = asyncio.to_thread(
-#                 lambda: list(
-#                     db.collection("votes")
-#                     .where("election_id", "==", election.election_id)
-#                     .stream()
-#                 )
-#             )
-#             proposal_docs_future = asyncio.to_thread(
-#                 lambda: list(
-#                     db.collection("proposals")
-#                     .where("election_id", "==", election.election_id)
-#                     .stream()
-#                 )
-#             )
-#             vote_docs, proposal_docs = await asyncio.gather(
-#                 vote_docs_future, proposal_docs_future
-#             )
-#             votes = [Vote.model_validate(doc.to_dict()) for doc in vote_docs]
-#             proposals = [
-#                 Proposal.model_validate(doc.to_dict()) for doc in proposal_docs
-#             ]
-
-#             # Call the asynchronous update function for state transition
-#             updated_election = await update_election_status_and_resolve(
-#                 election, db, memberships, proposals, votes
-#             )
-#             elections_list.append(updated_election)
-
-#     # Optionally, you might want to sort the elections_list here by end_date if needed
-#     elections_list.sort(key=lambda e: e.end_date, reverse=True)
-
-#     return elections_list
-
 @router.get("/", response_model=List[Election])
 async def get_elections_by_group(
     group_id: str, current_user: User = Depends(get_current_user)
@@ -494,6 +257,89 @@ async def get_elections_by_group(
 
     return elections_list
 
+
+@router.get("/{election_id}", response_model=ElectionDetailsResponse)
+async def get_election_details(
+    group_id: str, election_id: str, current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieves election details including all proposals, with their votes (if the election is closed)
+    """
+
+    # Check if the current user is a member of the group
+    current_user_membership_ref = db.collection("memberships").document(
+        f"{current_user.uid}_{group_id}"
+    )
+    current_user_membership_doc = current_user_membership_ref.get()
+
+    if not current_user_membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group",
+        )
+
+    # Get the election
+    election_ref = db.collection("elections").document(election_id)
+
+    # Parallelize these Firestore reads using asyncio.gather
+    election_doc_future = asyncio.to_thread(election_ref.get) # Run get() in thread pool
+    membership_docs_future = asyncio.to_thread(lambda: list(db.collection("memberships").where("group_id", "==", group_id).stream()))
+    vote_docs_future = asyncio.to_thread(lambda: list(db.collection("votes").where("election_id", "==", election_id).stream()))
+    proposal_docs_future = asyncio.to_thread(lambda: list(db.collection("proposals").where("election_id", "==", election_id).stream()))
+
+    (election_doc, membership_docs, vote_docs_list, proposal_docs_list) = await asyncio.gather(
+        election_doc_future, membership_docs_future, vote_docs_future, proposal_docs_future
+    )
+
+    if not election_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+
+    election = Election.model_validate(election_doc.to_dict())
+
+    memberships = {
+        doc.to_dict().get("membership_id"): Membership.model_validate(doc.to_dict())
+        for doc in membership_docs
+    }
+    votes = [Vote.model_validate(vote_doc.to_dict()) for vote_doc in vote_docs_list]
+    proposals = [
+        Proposal.model_validate(proposal_doc.to_dict())
+        for proposal_doc in proposal_docs_list
+    ]
+
+    updated_election = await update_election_status_and_resolve(
+        election, db, memberships, proposals, votes
+    )  # Pass memberships, proposals, votes
+
+    # Get all proposals associated with the election (after status update)
+    proposal_docs = (  # Re-fetch proposals to ensure they are in sync with potentially updated election
+        db.collection("proposals").where("election_id", "==", election_id).stream()
+    )
+    proposals = []  # Re-initialize proposals list
+    for proposal_doc in proposal_docs:
+        proposal = Proposal.model_validate(proposal_doc.to_dict())
+        # if the election is closed, get all of the votes for that proposal
+        if (
+            updated_election.status == ElectionStatus.CLOSED
+        ):  # Use updated_election status
+            vote_docs = (
+                db.collection("votes")
+                .where("proposal_id", "==", proposal.proposal_id)
+                .stream()
+            )
+            votes_for_proposal = [
+                Vote.model_validate(vote_doc.to_dict()).model_dump()
+                for vote_doc in vote_docs
+            ]
+            proposals.append({**proposal.model_dump(), "votes": votes_for_proposal})
+        else:
+            proposals.append({**proposal.model_dump(), "votes": []})
+
+    election_data = updated_election.model_dump()  # Use updated_election data
+    election_data.pop("proposals", None)
+    # Construct a response with all proposals (and vote information if election is closed)
+    return ElectionDetailsResponse(**election_data, proposals=proposals)
 
 @router.post(
     "/{election_id}/proposals",

@@ -1,4 +1,5 @@
 # backend/api/routes/groups.py
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 from models import Group, TokenSettings, Membership, User
 from db import db
@@ -107,7 +108,6 @@ async def create_group(
 
     return group
 
-
 @router.get("/{group_id}/members", response_model=List[MemberWithDetails])
 async def get_group_members_with_details(
     group_id: str,
@@ -133,17 +133,20 @@ async def get_group_members_with_details(
         .stream()
     )
 
+    memberships = [Membership.model_validate(doc.to_dict()) for doc in membership_docs]
+
+    user_ids = [membership.user_id for membership in memberships]
+    user_refs = [db.collection("users").document(user_id) for user_id in user_ids]
+
+    # Fetch all user documents in parallel using asyncio.gather and batch get
+    user_docs_coroutines = [asyncio.to_thread(user_ref.get) for user_ref in user_refs] # Run get() in thread pool
+    user_docs = await asyncio.gather(*user_docs_coroutines)
+
     members_with_details = []
-    for membership_doc in membership_docs:
-      membership = Membership.model_validate(membership_doc.to_dict())
-
-        #Fetch the user for the membership
-      user_ref = db.collection("users").document(membership.user_id)
-      user_doc = user_ref.get()
-
-      if user_doc.exists:
-        user = User.model_validate(user_doc.to_dict())
-        members_with_details.append(MemberWithDetails(user=user, membership=membership))
+    for membership, user_doc in zip(memberships, user_docs): # Iterate through memberships and fetched user docs
+        if user_doc.exists:
+            user = User.model_validate(user_doc.to_dict())
+            members_with_details.append(MemberWithDetails(user=user, membership=membership))
 
     return members_with_details
 
