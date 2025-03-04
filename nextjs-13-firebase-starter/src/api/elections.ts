@@ -1,6 +1,6 @@
 // src/api/elections.ts
 import { api } from '@/lib/api';
-import { Election, Proposal, Vote, ProposalCreate, ElectionCreate, VoteCreate } from '@/models/models'; // Import from models.ts
+import { EnhancedElectionDetailsResponse, Election, Proposal, Vote, ProposalCreate, ElectionCreate, VoteCreate } from '@/models/models'; // Import from models.ts
 
 
 export const createElection = async (
@@ -152,3 +152,17 @@ export const startElectionNow = async (
   );
   return response.data;
 };
+
+export async function getEnhancedElectionDetails(
+  groupId: string,
+  electionId: string,
+  token: string
+): Promise<EnhancedElectionDetailsResponse> {
+  const response = await api.get(`/groups/enhanced-election/${groupId}/${electionId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.data;
+}

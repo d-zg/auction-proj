@@ -103,3 +103,9 @@ export interface EnhancedGroupDetailsResponse {
   members: MemberWithDetails[];
   elections: Election[];
 }
+
+export interface EnhancedElectionDetailsResponse {
+  election: Election;
+  members: MemberWithDetails[];
+  proposals: Proposal[];
+}
