@@ -194,6 +194,7 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({
   return (
     <div>
       {error && <p className="text-red-500">{error}</p>}
+      <h3 className="text-xl font-semibold mb-4">Proposals</h3>
       {renderProposals()}
       {election.status === 'open' && selectedProposalId && (
         <div className="mt-6 p-4 border rounded bg-white shadow-sm">
