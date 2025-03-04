@@ -571,7 +571,6 @@ async def cast_vote(
         existing_votes = list(existing_vote_docs)
 
         updated_vote = None
-        # pdb.set_trace()
         if existing_votes:
             # User has voted, update their vote
             for existing_vote_doc in existing_votes:

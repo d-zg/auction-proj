@@ -20,7 +20,6 @@ interface Group { // Original Group interface, assuming it's already defined
     elections: string[];
 }
 
-
 const GroupsPage: React.FC = () => {
     const { user, setUser } = useAuthContext() as { user: any, setUser: any };
     const router = useRouter();
@@ -29,13 +28,14 @@ const GroupsPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState('lastElection'); // Default sort by last election
-    const sortOptions = ['lastElection', 'name']; // Available sort options - removed admin and role
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc'); // New state for sort order
+    const sortOptions = ['lastElection', 'name']; // Available sort options
 
     useEffect(() => {
         if (user == null) {
-            router.push("/")
+            router.push("/");
         }
-    }, [user, router])
+    }, [user, router]);
 
     const fetchGroupsData = async () => {
         if (!user) {
@@ -65,6 +65,7 @@ const GroupsPage: React.FC = () => {
             setLoading(false);
         }
     };
+
     useEffect(() => {
         fetchGroupsData();
     }, [user]);
@@ -73,10 +74,10 @@ const GroupsPage: React.FC = () => {
         if (!user) {
             return;
         }
-        const groupName = prompt('Enter the name of the new group:')
+        const groupName = prompt('Enter the name of the new group:');
         if (!groupName) {
-            alert("No group name was given.")
-            return
+            alert("No group name was given.");
+            return;
         }
         const groupDescription = prompt('Enter an optional description for the group:') || "";
 
@@ -90,19 +91,17 @@ const GroupsPage: React.FC = () => {
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
-            })
+            });
 
             if (response.status === 201) {
-                alert(`Successfully created group: ${response.data.name}`)
+                alert(`Successfully created group: ${response.data.name}`);
                 // Refetch groups to update the list
                 fetchGroupsData();
+            } else {
+                alert(`Failed to create group with status ${response.status}`);
             }
-            else {
-                alert(`Failed to create group with status ${response.status}`)
-            }
-        }
-        catch (err: any) {
-            alert(`Failed to create group: ${err.message}`)
+        } catch (err: any) {
+            alert(`Failed to create group: ${err.message}`);
         }
     };
 
@@ -118,27 +117,32 @@ const GroupsPage: React.FC = () => {
         }
     };
 
+    // Filter groups by name using searchQuery
     const filteredGroups = useMemo(() => {
         return groupsEnhanced.filter(group =>
             group.group.name.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [groupsEnhanced, searchQuery]);
 
+    // Sort groups based on sortBy and sortOrder
     const sortedGroups = useMemo(() => {
         let sorted = [...filteredGroups]; // Sort filtered groups
 
         if (sortBy === 'name') {
-            sorted.sort((a, b) => a.group.name.localeCompare(b.group.name));
+            sorted.sort((a, b) => {
+                return sortOrder === 'asc'
+                    ? a.group.name.localeCompare(b.group.name)
+                    : b.group.name.localeCompare(a.group.name);
+            });
         } else if (sortBy === 'lastElection') {
             sorted.sort((a, b) => {
-                const dateA = a.last_election_date ? new Date(a.last_election_date).getTime() : -Infinity; // No election = bottom
-                const dateB = b.last_election_date ? new Date(b.last_election_date).getTime() : -Infinity;
-                return dateB - dateA; // Descending for last election
+                const dateA = a.last_election_date ? new Date(a.last_election_date).getTime() : (sortOrder === 'asc' ? Infinity : -Infinity);
+                const dateB = b.last_election_date ? new Date(b.last_election_date).getTime() : (sortOrder === 'asc' ? Infinity : -Infinity);
+                return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
             });
         }
         return sorted;
-    }, [filteredGroups, sortBy]);
-
+    }, [filteredGroups, sortBy, sortOrder]);
 
     if (loading) {
         return <div>Loading groups...</div>;
@@ -160,14 +164,8 @@ const GroupsPage: React.FC = () => {
                 </button>
             </div>
 
+            {/* Control Panel with sort options and create group button */}
             <div className="mb-4 flex items-center space-x-4">
-                <input
-                    type="search"
-                    placeholder="Search groups..."
-                    className="shadow appearance-none border rounded w-1/3 py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
                 <select
                     className="shadow appearance-none border rounded py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                     value={sortBy}
@@ -176,17 +174,33 @@ const GroupsPage: React.FC = () => {
                     <option value="lastElection">Sort by Last Election</option>
                     <option value="name">Sort by Name</option>
                 </select>
+                <button
+                    onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
+                >
+                    {sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                </button>
                 <button onClick={handleCreateGroup} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
                     Create New Group
                 </button>
             </div>
 
+            {/* Search bar placed above the groups list aligned to the right */}
+            <div className="flex justify-end mb-4">
+                <input
+                    type="search"
+                    placeholder="Search groups..."
+                    className="shadow appearance-none border rounded w-1/3 py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+            </div>
 
             {sortedGroups.length > 0 ? (
                 <ul className="space-y-4">
                     {sortedGroups.map(groupEnhanced => (
                         <li key={groupEnhanced.group.group_id} className="bg-white shadow rounded p-4">
-                            <Link href={`/groups/${groupEnhanced.group.group_id}`} >
+                            <Link href={`/groups/${groupEnhanced.group.group_id}`}>
                                 <h2 className="text-xl font-semibold hover:underline cursor-pointer group-header">
                                     {groupEnhanced.group.name}
                                     {groupEnhanced.has_active_elections && (

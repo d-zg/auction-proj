@@ -110,6 +110,11 @@ class Vote(BaseModel):
     membership: Optional[Membership] = None  # Relationship: Vote belongs to Membership
     proposal: Optional[Proposal] = None  # Relationship: Vote belongs to Proposal
 
+
+class MemberWithDetails(BaseModel):
+    membership: Membership
+    user: User
+
 # Forward references to avoid circular dependencies
 User.model_rebuild()
 Group.model_rebuild()

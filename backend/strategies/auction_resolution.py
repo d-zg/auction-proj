@@ -140,7 +140,7 @@ class SecondPriceCalculationStrategy(PriceCalculationStrategy):
         if len(sorted_votes) < 2:
             return 1 # multiplier
         else:
-            return float(sorted_votes[1] / sorted_votes[0]) # multiplier
+            return float(sorted_votes[1] / sorted_votes[0]) if sorted_votes[0] else 1# multiplier
 
 class AllPayPaymentStrategy(PaymentApplicationStrategy):
     """
