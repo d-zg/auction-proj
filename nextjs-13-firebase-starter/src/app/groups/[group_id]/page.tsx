@@ -7,27 +7,27 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import InviteUserModal from './components/InviteUserModal';
 import StartElectionModal from './components/StartElectionModal';
-import EditTokenBalanceModal from './components/EditTokenBalanceModal'; // Import the new modal
+import EditTokenBalanceModal from './components/EditTokenBalanceModal';
 import EditTokenSettingsModal from './components/EditTokenSettingsModal';
 import ElectionList from './components/ElectionList';
-import { getGroupDetails, getGroupMembers, getGroupElections, removeUserFromGroup } from '@/api/groups';
-import { User, Membership, MemberWithDetails, Group, Election } from '@/models/models'; //
+import { getEnhancedGroupDetails, removeUserFromGroup } from '@/api/groups';
+import { Group, MemberWithDetails, Election } from '@/models/models';
 
 const GroupDetailsPage: React.FC = () => {
     const { user } = useAuthContext() as { user: any };
     const router = useRouter();
     const [group, setGroup] = useState<Group | null>(null);
     const [members, setMembers] = useState<MemberWithDetails[]>([]);
-     const [elections, setElections] = useState<Election[]>([]);
+    const [elections, setElections] = useState<Election[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const pathname = usePathname();
     const [isAdmin, setIsAdmin] = useState(false);
     const [isStartElectionModalOpen, setIsStartElectionModalOpen] = useState(false);
-    const [isEditTokenModalOpen, setIsEditTokenModalOpen] = useState(false); // State for EditTokenBalanceModal
-    const [isEditTokenSettingsModalOpen, setIsEditTokenSettingsModalOpen] = useState(false); // State for EditTokenSettingsModal
-    const [memberToEdit, setMemberToEdit] = useState<MemberWithDetails | null>(null); // State to track member being edited
+    const [isEditTokenModalOpen, setIsEditTokenModalOpen] = useState(false);
+    const [isEditTokenSettingsModalOpen, setIsEditTokenSettingsModalOpen] = useState(false);
+    const [memberToEdit, setMemberToEdit] = useState<MemberWithDetails | null>(null);
 
     const groupId = pathname.split('/')[2];
 
@@ -36,24 +36,22 @@ const GroupDetailsPage: React.FC = () => {
             setLoading(false);
             return;
         }
-
+    
         try {
             setLoading(true);
             const token = await user.getIdToken();
-
-            // Initiate all API calls concurrently using Promise.all
-            const [groupData, membersData, electionsData] = await Promise.all([
-                getGroupDetails(groupId, token),
-                getGroupMembers(groupId, token),
-                getGroupElections(groupId, token),
-            ]);
-
-            setGroup(groupData);
-            setMembers(membersData);
-             setElections(electionsData);
+    
+            // Fetch all group data concurrently from the new endpoint.
+            const enhancedData = await getEnhancedGroupDetails(groupId, token);
+            setGroup(enhancedData.group);
+            setMembers(enhancedData.members);
+            setElections(enhancedData.elections);
             setError(null);
-
-            const currentUserMembership = membersData.find(
+    
+            // Sort elections by start_date in descending order (newest first)
+            enhancedData.elections.sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+    
+            const currentUserMembership = enhancedData.members.find(
                 (member) => member.membership.user_id === user.uid
             );
             if (currentUserMembership && currentUserMembership.membership.role === 'admin') {
@@ -90,7 +88,7 @@ const GroupDetailsPage: React.FC = () => {
 
     const handleCloseEditTokenModal = () => {
         setIsEditTokenModalOpen(false);
-        setMemberToEdit(null); // Clear member to edit when modal closes
+        setMemberToEdit(null);
     };
 
     const handleOpenEditTokenSettingsModal = () => setIsEditTokenSettingsModalOpen(true);
@@ -99,26 +97,25 @@ const GroupDetailsPage: React.FC = () => {
     const handleRemoveMember = async (memberToRemove: MemberWithDetails) => {
         if (!user || !groupId) return;
         if (!isAdmin) {
-            alert("Only admins can remove members."); // Or handle this with better UI feedback
+            alert("Only admins can remove members.");
             return;
         }
         if (!window.confirm(`Are you sure you want to remove ${memberToRemove.user.email} from the group?`)) {
-            return; // User cancelled removal
+            return;
         }
 
         setLoading(true);
         setError(null);
         try {
             const token = await user.getIdToken();
-            if (typeof memberToRemove.user.email === 'string') { // Check if email is a string
+            if (typeof memberToRemove.user.email === 'string') {
                 await removeUserFromGroup(groupId, memberToRemove.user.email, token);
                 alert(`${memberToRemove.user.email} removed from group.`);
-                fetchGroupData(); // Refresh member list
+                fetchGroupData();
             } else {
-                setError("Could not remove member: Email address is missing."); // Handle case where email is null
+                setError("Could not remove member: Email address is missing.");
                 console.error("Error removing member: Email address is missing.");
             }
-
         } catch (err: any) {
             setError(err.response?.data?.detail || 'Failed to remove member.');
             console.error("Error removing member:", err);
@@ -126,7 +123,6 @@ const GroupDetailsPage: React.FC = () => {
             setLoading(false);
         }
     };
-
 
     if (loading) {
         return <div>Loading group details...</div>;
@@ -162,7 +158,7 @@ const GroupDetailsPage: React.FC = () => {
                             Tokens: {member.membership.token_balance}
                         </div>
                         <div className="flex gap-2">
-                            {isAdmin && member.membership.user_id !== user.uid && ( // Don't allow admin to remove themselves with this button
+                            {isAdmin && member.membership.user_id !== user.uid && (
                                 <button
                                     onClick={() => handleRemoveMember(member)}
                                     className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
@@ -185,7 +181,6 @@ const GroupDetailsPage: React.FC = () => {
                 ))}
             </ul>
 
-            {/* Invite User Button (only for admins) */}
             {isAdmin && (
                 <button
                     onClick={handleOpenInviteModal}
@@ -196,7 +191,6 @@ const GroupDetailsPage: React.FC = () => {
                 </button>
             )}
 
-            {/* Start Election Button (only for admins) */}
             {isAdmin && (
                 <button
                     onClick={handleOpenStartElectionModal}
@@ -207,7 +201,6 @@ const GroupDetailsPage: React.FC = () => {
                 </button>
             )}
 
-            {/* Edit Token Settings Button (only for admins) */}
             {isAdmin && (
                 <button
                     onClick={handleOpenEditTokenSettingsModal}
@@ -222,7 +215,7 @@ const GroupDetailsPage: React.FC = () => {
             <h2 className="text-xl font-semibold mb-2">Elections</h2>
             {elections.length > 0 ? (
                 <ul className="mb-4">
-                  <ElectionList groupId={groupId} elections={elections} />
+                    <ElectionList groupId={groupId} elections={elections} />
                 </ul>
             ) : (
                 <p>No elections found for this group.</p>
@@ -255,8 +248,9 @@ const GroupDetailsPage: React.FC = () => {
                 user={user}
                 fetchGroupDetails={fetchGroupData}
             />
-             {/* Edit Token Settings Modal */}
-             <EditTokenSettingsModal
+
+            {/* Edit Token Settings Modal */}
+            <EditTokenSettingsModal
                 isOpen={isEditTokenSettingsModalOpen}
                 onClose={handleCloseEditTokenSettingsModal}
                 groupId={groupId}

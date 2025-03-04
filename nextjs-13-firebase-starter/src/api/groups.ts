@@ -1,6 +1,6 @@
 // src/api/groups.ts
 import { api } from '@/lib/api';
-import { Group, Membership, MemberWithDetails, Election } from '@/models/models'; // Import from models.ts
+import { Group, Membership, MemberWithDetails, EnhancedGroupDetailsResponse, Election } from '@/models/models'; // Import from models.ts
 
 export const getGroupDetails = async (groupId: string, token: string): Promise<Group> => {
   const response = await api.get(`/groups/${groupId}`, {
@@ -123,3 +123,16 @@ export const removeUserFromGroup = async (groupId: string, email: string, token:
     });
     return response;
 };
+
+export async function getEnhancedGroupDetails(
+  groupId: string,
+  token: string
+): Promise<EnhancedGroupDetailsResponse> {
+  const response = await api.get(`/groups/enhanced-group/${groupId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.data;
+}

@@ -15,8 +15,7 @@ import ElectionProposalList from './components/ElectionProposalList';
 const ElectionDetailsPage: React.FC = () => { // Change to React.FC - Next.js will infer props
     const { user } = useAuthContext() as { user: any };
     const router = useRouter();
-    const paramsPromise = Promise.resolve(useParams());
-    const params = React.use(paramsPromise);
+    const params = useParams();
     const groupId = params.group_id as string;
     const electionId = params.election_id as string;
     const [election, setElection] = useState<Election | null>(null);

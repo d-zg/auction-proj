@@ -91,3 +91,15 @@ export interface VoteCreate {
   proposal_id: string;
   tokens_used: number;
 }
+
+export interface EnhancedGroupResponse {
+  group: Group;
+  has_active_elections: boolean;
+  last_election_date: string | null; // Or Date if you prefer to parse as Date object on frontend
+}
+
+export interface EnhancedGroupDetailsResponse {
+  group: Group;
+  members: MemberWithDetails[];
+  elections: Election[];
+}

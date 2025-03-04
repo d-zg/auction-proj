@@ -17,7 +17,7 @@ export const createElection = async (
 };
 
 export const getElectionsByGroup = async (groupId: string, token: string): Promise<Election[]> => {
-  const response = await api.get(`/groups/${groupId}/elections`, {
+  const response = await api.get(`/groups/${groupId}/elections/`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
