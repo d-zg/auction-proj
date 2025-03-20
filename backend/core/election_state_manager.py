@@ -6,6 +6,7 @@ from models import Election, ElectionStatus, Group
 from strategies.auction_resolution import ( # Import strategies if needed for closing
     AuctionResolutionStrategy,
     MostVotesWinsStrategy,
+    LotteryWinsStrategy,
     FirstPriceCalculationStrategy,
     SecondPriceCalculationStrategy,
     AllPayPaymentStrategy,
@@ -47,17 +48,32 @@ async def update_election_status_and_resolve(election: Election, db: firestore.C
 
         # --- Resolve and Close Election Logic (Reusing from your close_election route) ---
         # Determine which strategy to use based on the payment and price options
-
-        if election.payment_options == "allpay" and election.price_options.startswith("1,"):
-            strategy = MostVotesWinsStrategy(price_strategy=FirstPriceCalculationStrategy(), payment_strategy=AllPayPaymentStrategy())
-        elif election.payment_options == "allpay" and election.price_options.startswith("2,"):
-            strategy = MostVotesWinsStrategy(price_strategy=SecondPriceCalculationStrategy(), payment_strategy=AllPayPaymentStrategy())
-        elif election.payment_options == "winnerspay" and election.price_options.startswith("1,"):
-            strategy = MostVotesWinsStrategy(price_strategy=FirstPriceCalculationStrategy(), payment_strategy=WinnersPayPaymentStrategy())
-        elif election.payment_options == "winnerspay" and election.price_options.startswith("2,"):
-           strategy = MostVotesWinsStrategy(price_strategy=SecondPriceCalculationStrategy(), payment_strategy=WinnersPayPaymentStrategy())
+        if election.resolution_strategy == 'lottery':
+            # For lottery, price options don't affect the strategy
+            if election.payment_options == "allpay":
+                strategy = LotteryWinsStrategy(payment_strategy=AllPayPaymentStrategy())
+            elif election.payment_options == "winnerspay":
+                strategy = LotteryWinsStrategy(payment_strategy=WinnersPayPaymentStrategy())
+            else:
+                raise Exception("Invalid payment option for lottery resolution")
+        elif election.resolution_strategy == 'most_votes':
+            if election.payment_options == "allpay" and election.price_options.startswith("1,"):
+                strategy = MostVotesWinsStrategy(price_strategy=FirstPriceCalculationStrategy(),
+                                                payment_strategy=AllPayPaymentStrategy())
+            elif election.payment_options == "allpay" and election.price_options.startswith("2,"):
+                strategy = MostVotesWinsStrategy(price_strategy=SecondPriceCalculationStrategy(),
+                                                payment_strategy=AllPayPaymentStrategy())
+            elif election.payment_options == "winnerspay" and election.price_options.startswith("1,"):
+                strategy = MostVotesWinsStrategy(price_strategy=FirstPriceCalculationStrategy(),
+                                                payment_strategy=WinnersPayPaymentStrategy())
+            elif election.payment_options == "winnerspay" and election.price_options.startswith("2,"):
+                strategy = MostVotesWinsStrategy(price_strategy=SecondPriceCalculationStrategy(),
+                                                payment_strategy=WinnersPayPaymentStrategy())
+            else:
+                raise Exception("Invalid payment or price options for most votes resolution")
         else:
-             raise Exception("invalid payment or price options")
+            raise Exception("Invalid resolution strategy")
+
 
         # Resolve the auction using the selected strategy
         winning_proposal_id = await strategy.resolve_auction(election, proposals, votes, memberships, )

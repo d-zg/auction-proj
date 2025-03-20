@@ -70,6 +70,8 @@ export interface Vote {
   tokens_used: number;
   created_at: string;
   updated_at: string;
+  amount_paid: number;
+  tokens_regenerated: number;
 }
 
 // Interfaces for creating new objects
