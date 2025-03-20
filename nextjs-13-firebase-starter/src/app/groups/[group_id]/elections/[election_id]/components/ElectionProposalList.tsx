@@ -79,7 +79,6 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
             const updatedDetails = await getElectionDetails(groupId, electionId, token);
             // setElectionDetails(updatedDetails); // Parent component now manages electionDetails, no need to update here - or maybe update parent via callback? For now re-fetch in parent.
             // Instead of updating local state, trigger a refresh in the parent component, or ideally use optimistic updates and invalidate cache
-            router.refresh(); // Simplest way to refresh route and re-fetch data in parent for now
 
         } catch (err: any) {
             setError(err.response?.data?.detail || 'Failed to add proposal');
@@ -133,10 +132,12 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
     const handleProposalClick = (proposal: Proposal) => {
         setSelectedProposalId(proposal.proposal_id);
         // If user has a vote, pre-fill tokens from their vote, otherwise 0
-        setVoteTokens(userVoteForElection?.proposal_id === proposal.proposal_id ? userVoteForElection.tokens_used : 0);
+        setVoteTokens(userVoteForElection?.proposal_id === proposal.proposal_id ? userVoteForElection?.tokens_used : 0);
     };
 
     const renderProposals = () => {
+        console.log('here');
+        console.log(electionDetails.proposals);
         if (!electionDetails.proposals) return <div>No proposals yet.</div>; // Use prop electionDetails
 
         return electionDetails.proposals.map((proposal) => { // Use prop electionDetails
@@ -151,7 +152,9 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
                         <h4 className="font-semibold cursor-pointer">{proposal.title}</h4>
                         {electionDetails.status === 'open' && userHasVotedForThisProposal && ( // Use prop electionDetails
                             <div className="mt-2 relative">
-                                <p className="text-sm text-gray-600">Voted with {userVoteForElection!.tokens_used} tokens</p>
+                                <p className="text-sm text-gray-600">
+                                    Voted with {userVoteForElection?.tokens_used ?? 0} tokens
+                                </p>
                             </div>
                         )}
                         {electionDetails.status === 'closed' && proposal.votes && proposal.votes.length > 0 && ( // Use prop electionDetails
@@ -185,7 +188,7 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
     };
 
     return (
-        <div>
+        <div key={"election_prop"}>
             {error && <p className="text-red-500">{error}</p>}
             <h3 className="text-xl font-semibold mb-4">Proposals</h3>
             {renderProposals()}
