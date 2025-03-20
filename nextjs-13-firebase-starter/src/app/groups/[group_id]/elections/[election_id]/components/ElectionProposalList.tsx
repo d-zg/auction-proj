@@ -136,8 +136,6 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
     };
 
     const renderProposals = () => {
-        console.log('here');
-        console.log(electionDetails.proposals);
         if (!electionDetails.proposals) return <div>No proposals yet.</div>; // Use prop electionDetails
 
         return electionDetails.proposals.map((proposal) => { // Use prop electionDetails
@@ -163,7 +161,9 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
                                 <ul>
                                     {proposal.votes.map((vote) => (
                                         <li key={vote.vote_id} className="text-sm text-gray-600">
-                                            User ID: {vote.membership_id}, Tokens: {vote.tokens_used}
+                                                User ID: {vote.membership_id}, Voted With: {vote.tokens_used}, 
+                                                Paid: {vote.amount_paid}, 
+                                                Regenerated: {vote.tokens_regenerated}
                                         </li>
                                     ))}
                                 </ul>

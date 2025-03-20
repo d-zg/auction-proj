@@ -170,10 +170,19 @@ class AllPayPaymentStrategy(PaymentApplicationStrategy):
                 if token_settings.regeneration_interval == "election":
         # Election Regeneration - handled after election closure, not here
                     tokens_to_add = token_settings.regeneration_rate
-
+                pre_regeneration = new_balance
                 new_balance = min(new_balance + tokens_to_add, token_settings.max_tokens)
+                tokens_regenerated = new_balance - pre_regeneration
+                amount_paid = vote.tokens_used
 
                 membership_ref.update({"token_balance": new_balance})
+
+                # Update vote document with extra details
+                vote_ref = db.collection("votes").document(vote.vote_id)
+                vote_ref.update({
+                    "amount_paid": amount_paid,
+                    "tokens_regenerated": tokens_regenerated,
+                })
 
 class WinnersPayPaymentStrategy(PaymentApplicationStrategy):
     """
@@ -186,7 +195,8 @@ class WinnersPayPaymentStrategy(PaymentApplicationStrategy):
             membership = memberships.get(vote.membership_id)
             if membership and vote.proposal_id == winning_proposal_id:
                 membership_ref = db.collection("memberships").document(membership.membership_id)
-                new_balance = membership.token_balance - math.floor(vote.tokens_used * price_for_tokens) # use price to discount if only winners pay
+                amount_paid =  math.floor(vote.tokens_used * price_for_tokens) # use price to discount if only winners pay
+                new_balance = membership.token_balance - amount_paid
 
                 group_id = membership.group_id
                 group_ref = db.collection("groups").document(group_id)
@@ -201,9 +211,18 @@ class WinnersPayPaymentStrategy(PaymentApplicationStrategy):
         # Election Regeneration - handled after election closure, not here
                     tokens_to_add = token_settings.regeneration_rate
 
+                before_regeneration = new_balance
                 new_balance = min(new_balance + tokens_to_add, token_settings.max_tokens)
+                tokens_regenerated = new_balance - before_regeneration
 
                 if new_balance < 0:
                     # should log this somewhere so that admins know that something has gone wrong
                     new_balance = 0
                 membership_ref.update({"token_balance": new_balance})
+
+                # Update vote document with extra details
+                vote_ref = db.collection("votes").document(vote.vote_id)
+                vote_ref.update({
+                    "amount_paid": amount_paid,
+                    "tokens_regenerated": tokens_regenerated,
+                })
