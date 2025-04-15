@@ -21,8 +21,11 @@ const Page: React.FC = () => {
     const { result, error } = await signIn(email, password);
 
     if (error) {
-      // Set error message based on Firebase error
-      setError(error.message || 'Failed to sign in. Please check your credentials.');
+      // Handle Firebase error object properly
+      const errorMessage = typeof error === 'object' && error !== null && 'message' in error
+        ? error.message as string
+        : 'Failed to sign in. Please check your credentials.';
+      setError(errorMessage);
       return;
     }
 
