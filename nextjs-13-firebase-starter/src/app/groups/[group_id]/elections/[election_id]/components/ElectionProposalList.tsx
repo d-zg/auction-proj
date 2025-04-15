@@ -12,76 +12,90 @@ interface ElectionProposalListProps {
     electionDetails: Election | null;
     groupId: string;
     isAdmin: boolean;
-    members: MemberWithDetails[]; // Receive members as prop
-    electionId: string; // Receive electionId as prop
+    members: MemberWithDetails[];
+    electionId: string;
+    onProposalAdded: () => Promise<void>;
 }
 
-const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDetails, groupId, isAdmin, members, electionId }) => { // Receive electionDetails and isAdmin as props, and electionId
+const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDetails, groupId, isAdmin, members, electionId, onProposalAdded }) => {
     const { user } = useAuthContext() as { user: any };
-    // const [electionDetails, setElectionDetails] = useState<Election | null>(null); // No longer manage electionDetails here
-    const [loading, setLoading] = useState(true);
+    const [initialLoading, setInitialLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [newProposalTitle, setNewProposalTitle] = useState('');
     const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
     const [voteTokens, setVoteTokens] = useState<number>(0);
     const [userVoteForElection, setUserVoteForElection] = useState<Vote | null>(null);
-    // const [isAdmin, setIsAdmin] = useState(false); // No longer manage isAdmin here
     const [userTokenBalance, setUserTokenBalance] = useState<number>(0);
+    const [localProposals, setLocalProposals] = useState<Proposal[]>([]);
     const router = useRouter();
 
     useEffect(() => {
-        const fetchProposalListData = async () => { // Fetch only proposal list related data
-            if (!user || !electionDetails) return; // Depend on prop electionDetails
-            setLoading(true);
-            setError(null);
+        // Update local proposals whenever electionDetails changes
+        if (electionDetails?.proposals) {
+            setLocalProposals(electionDetails.proposals);
+        }
+    }, [electionDetails?.proposals]);
+
+    useEffect(() => {
+        const fetchProposalListData = async () => {
+            if (!user || !electionDetails) return;
             try {
                 const token = await user.getIdToken();
-
 
                 const membershipDetails: Membership = await getMembershipDetails(groupId, token);
                 setUserTokenBalance(membershipDetails.token_balance);
 
-                const myVote = await getMyVoteForElection(groupId, electionId, token); // Use electionId prop here!
+                const myVote = await getMyVoteForElection(groupId, electionId, token);
                 setUserVoteForElection(myVote);
-
 
                 if (!electionDetails.proposals?.some(p => p.proposal_id === selectedProposalId)) {
                     setSelectedProposalId(null);
                     setVoteTokens(0);
                 }
-
             } catch (err: any) {
                 setError(err.message || 'Failed to load proposal list data');
                 console.error("Error fetching proposal list data:", err);
             } finally {
-                setLoading(false);
+                setInitialLoading(false);
             }
         };
 
-        fetchProposalListData(); // Call function to fetch proposal list related data
-    }, [electionId, groupId, user, electionDetails]); // Depend on prop electionDetails, and now electionId is available
+        fetchProposalListData();
+    }, [electionId, groupId, user, electionDetails]);
 
-    if (loading) {
+    if (initialLoading) {
         return <div>Loading election proposals...</div>;
     }
 
-    if (error || !electionDetails) { // Use prop electionDetails
+    if (error || !electionDetails) {
         return <div>Error: {error || 'Could not load election details'}</div>;
     }
 
     const handleAddProposal = async () => {
         if (!user || !newProposalTitle.trim()) return;
+        
+        // Create temporary proposal for optimistic update
+        const tempProposal: Proposal = {
+            proposal_id: 'temp_' + Date.now(),
+            election_id: electionId,
+            proposer_id: user.uid,
+            title: newProposalTitle,
+            created_at: new Date().toISOString(),
+            votes: []
+        };
+
+        // Optimistically add the proposal
+        setLocalProposals(prev => [...prev, tempProposal]);
+        
         try {
             const token = await user.getIdToken();
             const proposalData = { title: newProposalTitle };
-            await addProposalToElection(groupId, electionId, proposalData, token); // Use electionId prop here!
+            await addProposalToElection(groupId, electionId, proposalData, token);
             setNewProposalTitle('');
-            const updatedDetails = await getElectionDetails(groupId, electionId, token);
-            // setElectionDetails(updatedDetails); // Parent component now manages electionDetails, no need to update here - or maybe update parent via callback? For now re-fetch in parent.
-            // Instead of updating local state, trigger a refresh in the parent component, or ideally use optimistic updates and invalidate cache
-            router.refresh(); // Simplest way to refresh route and re-fetch data in parent for now
-
+            await onProposalAdded();
         } catch (err: any) {
+            // Revert optimistic update on error
+            setLocalProposals(prev => prev.filter(p => p.proposal_id !== tempProposal.proposal_id));
             setError(err.response?.data?.detail || 'Failed to add proposal');
             console.error("Error adding proposal:", err);
         }
@@ -95,13 +109,11 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
                 proposal_id: selectedProposalId,
                 tokens_used: voteTokens,
             };
-            const newVote = await castVote(groupId, electionId, voteData, token); // Use electionId prop here!
+            const newVote = await castVote(groupId, electionId, voteData, token);
             alert('Vote cast successfully!');
 
             setUserVoteForElection(newVote);
-            // const updatedDetails = await getElectionDetails(groupId, electionId, token); // No need to refetch all details here
-            // setElectionDetails(updatedDetails);
-            router.refresh(); // Refresh route to reflect vote changes
+            router.refresh();
 
         } catch (err: any) {
             setError(err.response?.data?.detail || 'Failed to cast vote');
@@ -110,7 +122,7 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
     };
 
     const handleDeleteProposal = async (proposalId: string) => {
-        if (!user || !isAdmin || electionDetails.status !== 'upcoming') return; // Use prop isAdmin and electionDetails
+        if (!user || !isAdmin || electionDetails.status !== 'upcoming') return;
 
         if (!window.confirm("Are you sure you want to delete this proposal?")) {
             return;
@@ -118,10 +130,8 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
 
         try {
             const token = await user.getIdToken();
-            await deleteProposal(groupId, electionId, proposalId, token); // Use electionId prop here!
-            // const updatedDetails = await getElectionDetails(groupId, electionId, token); // No need to refetch all details here
-            // setElectionDetails(updatedDetails);
-            router.refresh(); // Refresh route to reflect proposal deletion
+            await deleteProposal(groupId, electionId, proposalId, token);
+            router.refresh();
 
             alert('Proposal deleted successfully!');
         } catch (err: any) {
@@ -132,29 +142,40 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
 
     const handleProposalClick = (proposal: Proposal) => {
         setSelectedProposalId(proposal.proposal_id);
-        // If user has a vote, pre-fill tokens from their vote, otherwise 0
         setVoteTokens(userVoteForElection?.proposal_id === proposal.proposal_id ? userVoteForElection.tokens_used : 0);
     };
 
     const renderProposals = () => {
-        if (!electionDetails.proposals) return <div>No proposals yet.</div>; // Use prop electionDetails
+        if (!localProposals?.length) return <div>No proposals yet.</div>;
 
-        return electionDetails.proposals.map((proposal) => { // Use prop electionDetails
+        return localProposals.map((proposal) => {
+            if (!proposal?.proposal_id) {
+                console.error('Invalid proposal object:', proposal);
+                return null;
+            }
+
             const userHasVotedForThisProposal = userVoteForElection?.proposal_id === proposal.proposal_id;
+            const isTemporary = proposal.proposal_id.startsWith('temp_');
 
             return (
                 <div key={proposal.proposal_id}
-                    className={`mb-4 p-4 border rounded flex items-start justify-between ${selectedProposalId === proposal.proposal_id ? 'bg-gray-100' : 'bg-white hover:bg-gray-50'} ${userHasVotedForThisProposal ? 'bg-gray-200' : ''}`}
-                    onClick={() => handleProposalClick(proposal)}
+                    className={`mb-4 p-4 border rounded flex items-start justify-between 
+                        ${selectedProposalId === proposal.proposal_id ? 'bg-gray-100' : 'bg-white hover:bg-gray-50'} 
+                        ${userHasVotedForThisProposal ? 'bg-gray-200' : ''}
+                        ${isTemporary ? 'opacity-50' : ''}`}
+                    onClick={() => !isTemporary && handleProposalClick(proposal)}
                 >
                     <div>
-                        <h4 className="font-semibold cursor-pointer">{proposal.title}</h4>
-                        {electionDetails.status === 'open' && userHasVotedForThisProposal && ( // Use prop electionDetails
+                        <h4 className="font-semibold cursor-pointer">
+                            {proposal.title}
+                            {isTemporary && <span className="ml-2 text-gray-400">(Saving...)</span>}
+                        </h4>
+                        {electionDetails.status === 'open' && userHasVotedForThisProposal && (
                             <div className="mt-2 relative">
                                 <p className="text-sm text-gray-600">Voted with {userVoteForElection!.tokens_used} tokens</p>
                             </div>
                         )}
-                        {electionDetails.status === 'closed' && proposal.votes && proposal.votes.length > 0 && ( // Use prop electionDetails
+                        {electionDetails.status === 'closed' && proposal.votes && proposal.votes.length > 0 && (
                             <div className="mt-2">
                                 <h5 className="font-semibold">Votes:</h5>
                                 <ul>
@@ -166,13 +187,16 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
                                 </ul>
                             </div>
                         )}
-                        {electionDetails.status === 'closed' && electionDetails.winning_proposal_id === proposal.proposal_id && ( // Use prop electionDetails
+                        {electionDetails.status === 'closed' && electionDetails.winning_proposal_id === proposal.proposal_id && (
                             <p className="mt-2 font-bold text-green-600">Winning Proposal!</p>
                         )}
                     </div>
-                    {isAdmin && electionDetails.status === 'upcoming' && ( // Use prop isAdmin and electionDetails
+                    {isAdmin && electionDetails.status === 'upcoming' && (
                         <button
-                            onClick={() => handleDeleteProposal(proposal.proposal_id)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteProposal(proposal.proposal_id);
+                            }}
                             className="text-red-500 hover:text-red-700 font-bold text-xl"
                             aria-label={`Delete proposal ${proposal.title}`}
                         >
@@ -190,7 +214,7 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
             <h3 className="text-xl font-semibold mb-4">Proposals</h3>
             {renderProposals()}
 
-            {electionDetails?.status === 'open' && selectedProposalId && ( // Use prop electionDetails
+            {electionDetails?.status === 'open' && selectedProposalId && (
                 <div className="mt-6 p-4 border rounded bg-white shadow-sm">
                     <h4 className="font-semibold mb-2">Vote for Selected Proposal</h4>
                     <label htmlFor="voteSliderBottom" className="block text-sm font-medium text-gray-700">
@@ -217,7 +241,7 @@ const ElectionProposalList: React.FC<ElectionProposalListProps> = ({ electionDet
                 </div>
             )}
 
-            {electionDetails?.status === 'upcoming' && ( // Use prop electionDetails
+            {electionDetails?.status === 'upcoming' && (
                 <div className="mt-4">
                     <input
                         type="text"
