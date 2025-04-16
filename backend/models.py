@@ -109,6 +109,8 @@ class Vote(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
     membership: Optional[Membership] = None  # Relationship: Vote belongs to Membership
     proposal: Optional[Proposal] = None  # Relationship: Vote belongs to Proposal
+    amount_paid: int = 0
+    tokens_regenerated: int = 0
 
 
 class MemberWithDetails(BaseModel):

@@ -8,19 +8,24 @@ import LoadingScreen from '@/app/signin/components/LoadingScreen'; // Import Loa
 const Page: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState(''); // Add error state
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true); // State to control loading screen visibility
 
   // Handle form submission
   const handleForm = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setError(''); // Clear any existing errors
 
     // Attempt to sign in with provided email and password
     const { result, error } = await signIn(email, password);
 
     if (error) {
-      // Display and log any sign-in errors
-      console.log(error);
+      // Handle Firebase error object properly
+      const errorMessage = typeof error === 'object' && error !== null && 'message' in error
+        ? error.message as string
+        : 'Failed to sign in. Please check your credentials.';
+      setError(errorMessage);
       return;
     }
 
@@ -43,6 +48,11 @@ const Page: React.FC = () => {
         <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
           <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-xl">
             <h1 className="text-3xl font-bold mb-6 text-gray-800 text-center">Sign In</h1>
+            {error && ( // Add error message display
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <span className="block sm:inline">{error}</span>
+              </div>
+            )}
             <form onSubmit={handleForm} className="space-y-4">
               <div>
                 <label htmlFor="email" className="block text-gray-700 text-sm font-bold mb-2">

@@ -807,23 +807,21 @@ async def get_my_vote_for_election(
         return None  # Return None if no vote is found
 
 
-@router.put("/{election_id}/close-early", response_model=Election)
+@router.put("/{election_id}/close-early", response_model=ElectionDetailsResponse)
 async def close_election_early(
     group_id: str,
     election_id: str,
     current_user: User = Depends(get_current_user),
 ):
     """
-     Allows an admin to close an election early, regardless of the end_date.
-     """
+    Allows an admin to close an election early, regardless of the end_date.
+    Returns full election details including complete proposal data.
+    """
     logger.info(
         f"CLOSE_EARLY: Endpoint hit for election_id: {election_id}, group_id: {group_id}, user_uid: {current_user.uid}"
     )
 
     # Check if the current user is an admin of the group
-    logger.info(
-        f"CLOSE_EARLY: Checking membership for user {current_user.uid} in group {group_id}"
-    )
     current_user_membership_ref = db.collection("memberships").document(
         f"{current_user.uid}_{group_id}"
     )
@@ -837,9 +835,6 @@ async def close_election_early(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Current user is not a member of this group",
         )
-    logger.info(
-        f"CLOSE_EARLY: User {current_user.uid} IS a member of group {group_id}"
-    )
 
     current_user_membership = Membership.model_validate(
         current_user_membership_doc.to_dict()
@@ -853,14 +848,12 @@ async def close_election_early(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can close elections early",
         )
+
     logger.info(
         f"CLOSE_EARLY: User {current_user.uid} IS an admin of group {group_id}"
     )
 
     # Retrieve the existing election document
-    logger.info(
-        f"CLOSE_EARLY: Retrieving election document for election_id: {election_id}"
-    )
     election_ref = db.collection("elections").document(election_id)
     election_doc = election_ref.get()
 
@@ -890,28 +883,26 @@ async def close_election_early(
 
     # --- WORKAROUND: Modify end_date to current time ---
     now_utc = datetime.now(timezone.utc)
-    updated_election_data = {"end_date": now_utc}  # Prepare update data with new end_date
-    election_ref.update(updated_election_data)  # Update end_date in Firestore
-    election.end_date = now_utc  # Update in-memory election object as well
+    updated_election_data = {"end_date": now_utc}
+    election_ref.update(updated_election_data)
+    election.end_date = now_utc
     logger.info(
         f"CLOSE_EARLY: Temporarily updated election {election_id} end_date to current time for early closure."
-    )  # Log the date update
+    )
     # --- END WORKAROUND ---
 
     # Get all proposals and votes for resolution
-    logger.info(f"CLOSE_EARLY: Fetching proposals for election {election_id}")
     proposal_docs = (
         db.collection("proposals")
         .where("election_id", "==", election_id)
         .stream()
     )
-    proposals = [
+    proposals_list = [
         Proposal.model_validate(proposal_doc.to_dict())
         for proposal_doc in proposal_docs
     ]
-    logger.info(f"CLOSE_EARLY: Fetched {len(proposals)} proposals.")
+    logger.info(f"CLOSE_EARLY: Fetched {len(proposals_list)} proposals.")
 
-    logger.info(f"CLOSE_EARLY: Fetching votes for election {election_id}")
     vote_docs = (
         db.collection("votes")
         .where("election_id", "==", election_id)
@@ -921,7 +912,6 @@ async def close_election_early(
     logger.info(f"CLOSE_EARLY: Fetched {len(votes)} votes.")
 
     # Get all memberships for token balance updates
-    logger.info(f"CLOSE_EARLY: Fetching memberships for group {group_id}")
     membership_docs = (
         db.collection("memberships")
         .where("group_id", "==", group_id)
@@ -934,126 +924,12 @@ async def close_election_early(
     logger.info(f"CLOSE_EARLY: Fetched {len(memberships)} memberships.")
 
     # Resolve and close the election using the helper function
-    logger.info(
-        f"CLOSE_EARLY: Calling update_election_status_and_resolve for election {election_id} after end_date modification."
-    )
     updated_election = await update_election_status_and_resolve(
-        election, db, memberships, proposals, votes
+        election, db, memberships, proposals_list, votes
     )
     logger.info(
         f"CLOSE_EARLY: update_election_status_and_resolve returned, updated status: {updated_election.status}, winning_proposal_id: {updated_election.winning_proposal_id}"
     )
-
-    logger.info(
-        f"CLOSE_EARLY: Returning updated_election to client, status: {updated_election.status.value}, winning_proposal_id: {updated_election.winning_proposal_id}"
-    )
-    return updated_election
-
-
-@router.put("/{election_id}/start-now", response_model=Election)
-async def start_election_now(
-    group_id: str,
-    election_id: str,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Allows an admin to immediately start an upcoming election,
-    setting the start_date to the current time and transitioning it to 'open'.
-    """
-    logger.info(
-        f"start_election_now endpoint hit for election_id: {election_id}, group_id: {group_id}, user_uid: {current_user.uid}"
-    )  # DEBUG: Log endpoint entry
-
-    # Check if the current user is an admin of the group
-    current_user_membership_ref = db.collection("memberships").document(
-        f"{current_user.uid}_{group_id}"
-    )
-    current_user_membership_doc = current_user_membership_ref.get()
-
-    if not current_user_membership_doc.exists:
-        logger.warning(
-            f"User {current_user.uid} is not a member of group {group_id}"
-        )  # DEBUG: Log membership check fail
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Current user is not a member of this group",
-        )
-
-    current_user_membership = Membership.model_validate(
-        current_user_membership_doc.to_dict()
-    )
-
-    if current_user_membership.role != "admin":
-        logger.warning(
-            f"User {current_user.uid} is not an admin of group {group_id}"
-        )  # DEBUG: Log admin role check fail
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can start elections early",
-        )
-
-    # Retrieve the existing election document
-    election_ref = db.collection("elections").document(election_id)
-    election_doc = election_ref.get()
-
-    if not election_doc.exists:
-        logger.warning(
-            f"Election {election_id} not found"
-        )  # DEBUG: Log election not found
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Election not found",
-        )
-    election = Election.model_validate(election_doc.to_dict())
-
-    # Ensure that the election is upcoming
-    if election.status != ElectionStatus.UPCOMING:
-        logger.warning(
-            f"Election {election_id} is not upcoming, status is {election.status.value}, cannot start now."
-        )  # DEBUG: Log invalid status for start now
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"This election is not upcoming, it is {election.status.value}. Cannot start it now.",
-        )
-
-    # Update the election start_date to now
-    now_utc = datetime.now(timezone.utc)
-    updated_election_data = {
-        "start_date": now_utc,
-        "status": ElectionStatus.OPEN,  # Optimistically set status to open, state manager will confirm
-    }
-    election_ref.update(updated_election_data)
-
-    # Get all memberships, proposals, votes for state transition
-    membership_docs = (
-        db.collection("memberships").where("group_id", "==", group_id).stream()
-    )
-    memberships = {
-        doc.to_dict().get("membership_id"): Membership.model_validate(doc.to_dict())
-        for doc in membership_docs
-    }
-
-    vote_docs = db.collection("votes").where("election_id", "==", election_id).stream()
-    votes = [Vote.model_validate(doc.to_dict()) for doc in vote_docs]
-
-    proposal_docs = (
-        db.collection("proposals").where("election_id", "==", election_id).stream()
-    )
-    proposals = [
-        Proposal.model_validate(proposal_doc.to_dict())
-        for proposal_doc in proposal_docs
-    ]
-
-    # Transition to OPEN (or handle immediate closing if end_date is also in past)
-    logger.info(
-        f"Calling update_election_status_and_resolve for election {election_id} after start-now action."
-    )  # DEBUG: Log before state manager
-    updated_election = await update_election_status_and_resolve(
-        election, db, memberships, proposals, votes
-    )
-    logger.info(
-        f"update_election_status_and_resolve returned, updated status: {updated_election.status}"
-    )  # DEBUG: Log after state manager
 
     # Re-fetch the election document to get the absolute latest state
     updated_election_doc = election_ref.get()
@@ -1064,4 +940,127 @@ async def start_election_now(
         )
     updated_election = Election.model_validate(updated_election_doc.to_dict())
 
-    return updated_election
+    # Fetch proposals with full details (including vote info since election should be closed)
+    proposal_docs = db.collection("proposals").where("election_id", "==", election_id).stream()
+    proposals = []
+    for proposal_doc in proposal_docs:
+        proposal = Proposal.model_validate(proposal_doc.to_dict())
+        vote_docs = db.collection("votes").where("proposal_id", "==", proposal.proposal_id).stream()
+        votes_for_proposal = [
+            Vote.model_validate(vote_doc.to_dict()).model_dump()
+            for vote_doc in vote_docs
+        ]
+        proposals.append({**proposal.model_dump(), "votes": votes_for_proposal})
+
+    election_data = updated_election.model_dump()
+    election_data.pop("proposals", None)
+    logger.info(
+        f"CLOSE_EARLY: Returning updated election details with full proposals to client."
+    )
+    return ElectionDetailsResponse(**election_data, proposals=proposals)
+
+
+@router.put("/{election_id}/start-now", response_model=ElectionDetailsResponse)
+async def start_election_now(
+    group_id: str,
+    election_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Allows an admin to immediately start an upcoming election,
+    setting the start_date to the current time and transitioning it to 'open'.
+    Returns full election details including complete proposal data.
+    """
+    # Check if the current user is a member and an admin of the group
+    current_user_membership_ref = db.collection("memberships").document(
+        f"{current_user.uid}_{group_id}"
+    )
+    current_user_membership_doc = current_user_membership_ref.get()
+
+    if not current_user_membership_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Current user is not a member of this group",
+        )
+
+    current_user_membership = Membership.model_validate(
+        current_user_membership_doc.to_dict()
+    )
+
+    if current_user_membership.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can start elections early",
+        )
+
+    # Retrieve the existing election document
+    election_ref = db.collection("elections").document(election_id)
+    election_doc = election_ref.get()
+
+    if not election_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Election not found",
+        )
+    election = Election.model_validate(election_doc.to_dict())
+
+    # Ensure that the election is upcoming
+    if election.status != ElectionStatus.UPCOMING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This election is not upcoming, it is {election.status.value}. Cannot start it now.",
+        )
+
+    # Update the election start_date to now and set status to OPEN
+    now_utc = datetime.now(timezone.utc)
+    updated_election_data = {
+        "start_date": now_utc,
+        "status": ElectionStatus.OPEN,
+    }
+    election_ref.update(updated_election_data)
+
+    # Get all memberships, votes, and proposals needed for the state update
+    membership_docs = db.collection("memberships").where("group_id", "==", group_id).stream()
+    memberships = {
+        doc.to_dict().get("membership_id"): Membership.model_validate(doc.to_dict())
+        for doc in membership_docs
+    }
+
+    vote_docs = db.collection("votes").where("election_id", "==", election_id).stream()
+    votes = [Vote.model_validate(doc.to_dict()) for doc in vote_docs]
+
+    proposal_docs = db.collection("proposals").where("election_id", "==", election_id).stream()
+    proposals_list = [Proposal.model_validate(proposal_doc.to_dict()) for proposal_doc in proposal_docs]
+
+    # Transition to OPEN (or handle immediate closing if end_date is also in the past)
+    updated_election = await update_election_status_and_resolve(
+        election, db, memberships, proposals_list, votes
+    )
+
+    # Re-fetch the election document to get the absolute latest state
+    updated_election_doc = election_ref.get()
+    if not updated_election_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to re-fetch updated election document",
+        )
+    updated_election = Election.model_validate(updated_election_doc.to_dict())
+
+    # Fetch proposals with full details (including vote info if election is closed)
+    proposal_docs = db.collection("proposals").where("election_id", "==", election_id).stream()
+    proposals = []
+    for proposal_doc in proposal_docs:
+        proposal = Proposal.model_validate(proposal_doc.to_dict())
+        if updated_election.status == ElectionStatus.CLOSED:
+            vote_docs = db.collection("votes").where("proposal_id", "==", proposal.proposal_id).stream()
+            votes_for_proposal = [
+                Vote.model_validate(vote_doc.to_dict()).model_dump()
+                for vote_doc in vote_docs
+            ]
+            proposals.append({**proposal.model_dump(), "votes": votes_for_proposal})
+        else:
+            proposals.append({**proposal.model_dump(), "votes": []})
+
+    election_data = updated_election.model_dump()
+    election_data.pop("proposals", None)  # Remove any proposals key from the election data
+    return ElectionDetailsResponse(**election_data, proposals=proposals)

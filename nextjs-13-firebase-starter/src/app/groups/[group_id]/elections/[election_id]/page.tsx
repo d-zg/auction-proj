@@ -110,21 +110,19 @@ const ElectionDetailsPage: React.FC = () => { // Change to React.FC - Next.js wi
         setLoading(true);
         setError(null);
         try {
-            console.log("Calling startElectionNow API..."); // DEBUG: Log API call start
-            const token = await user.getIdToken();
-            const startedElection = await startElectionNow(groupId, electionId, token); // Call startElectionNow API
-            console.log("startElectionNow API call successful:", startedElection); // DEBUG: Log API call success
-            setElection(startedElection); // Update local election state
-            alert(`Election "${startedElection.election_name}" started successfully.`);
+          const token = await user.getIdToken();
+          const startedElection = await startElectionNow(groupId, electionId, token);
+          // Update state directly so that the proposals are refreshed immediately
+          setElection(startedElection);
+          alert(`Election "${startedElection.election_name}" started successfully.`);
         } catch (err: any) {
-            setError(err.response?.data?.detail || 'Failed to start election early.');
-            console.error("Error starting election early:", err);
+          setError(err.response?.data?.detail || 'Failed to start election early.');
+          console.error("Error starting election early:", err);
         } finally {
-            setLoading(false);
+          setLoading(false);
         }
     };
-
-
+      
     if (loading) {
         return <div>Loading election details...</div>;
     }
@@ -132,7 +130,6 @@ const ElectionDetailsPage: React.FC = () => { // Change to React.FC - Next.js wi
     if (error || !election) {
         return <div>Error: {error || 'Failed to load election.'}</div>;
     }
-
 
     return (
         <div className="container mx-auto p-4">
@@ -174,15 +171,19 @@ const ElectionDetailsPage: React.FC = () => { // Change to React.FC - Next.js wi
                     Close Election Early
                 </button>
             )}
+
+            {election && election.proposals && election.proposals.length > 0 ? (
             <ElectionProposalList
                 electionDetails={election}
                 groupId={groupId}
                 isAdmin={isAdmin}
+                onProposalAdded={refreshElectionDetails}
                 members={members}
                 electionId={electionId}
-                onProposalAdded={refreshElectionDetails}
             />
-
+            ) : (
+            <div>Loading proposals...</div>
+            )}
         </div>
     );
 };
