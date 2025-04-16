@@ -5,7 +5,7 @@ from enum import Enum
 
 class User(BaseModel):
     uid: str
-    email: EmailStr | None = None
+    email: EmailStr
     memberships: List["Membership"] = []
     # Add other relevant fields based on your user data
 

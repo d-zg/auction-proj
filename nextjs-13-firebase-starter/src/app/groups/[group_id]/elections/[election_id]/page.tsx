@@ -44,6 +44,17 @@ const ElectionDetailsPage: React.FC = () => { // Change to React.FC - Next.js wi
         }
     };
 
+    const refreshElectionDetails = async () => {
+        if (!user || !groupId || !electionId) return;
+        try {
+            const token = await user.getIdToken();
+            const electionDetails = await getElectionDetails(groupId, electionId, token);
+            setElection(electionDetails);
+        } catch (err: any) {
+            console.error("Error refreshing election details:", err);
+        }
+    };
+
     useEffect(() => {
         const fetchPageData = async () => { // Combined data fetching function
             if (!groupId || !electionId || !user) return;
@@ -166,6 +177,7 @@ const ElectionDetailsPage: React.FC = () => { // Change to React.FC - Next.js wi
                 electionDetails={election}
                 groupId={groupId}
                 isAdmin={isAdmin}
+                onProposalAdded={refreshElectionDetails}
                 members={members}
                 electionId={electionId}
             />
